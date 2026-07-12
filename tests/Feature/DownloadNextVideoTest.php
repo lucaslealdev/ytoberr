@@ -3,8 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Channel;
-use App\Models\Video;
 use App\Models\Setting;
+use App\Models\Video;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
@@ -24,8 +24,8 @@ class DownloadNextVideoTest extends TestCase
     {
         // DownloadNextVideo writes to the real downloads dir (not the faked disk), so clean up after ourselves.
         $downloadsDir = Setting::getStoragePath();
-        if (file_exists($downloadsDir . '/Space Channel')) {
-            exec('rm -rf ' . escapeshellarg($downloadsDir . '/Space Channel'));
+        if (file_exists($downloadsDir.'/Space Channel')) {
+            exec('rm -rf '.escapeshellarg($downloadsDir.'/Space Channel'));
         }
 
         parent::tearDown();
@@ -41,7 +41,7 @@ class DownloadNextVideoTest extends TestCase
         ]);
 
         // Seed a fake channel poster so we can assert it gets copied into the Plex show folder.
-        Storage::disk('public')->put('channels/' . $channel->id . '/poster.jpg', 'fake-poster-bytes');
+        Storage::disk('public')->put('channels/'.$channel->id.'/poster.jpg', 'fake-poster-bytes');
 
         $video = Video::create([
             'channel_id' => $channel->id,
@@ -87,37 +87,35 @@ BASH);
         $this->assertStringContainsString('Space Channel/Season 2026', $video->file_path);
         $this->assertStringContainsString('Landing on Mars [space_vid_123].mp4', $video->file_path);
 
-        // Confirm thumbnail is copied as local asset
+        // Confirm thumbnail is copied as a local asset, named to exactly match the video's own
+        // filename (Plex's Local Media Assets convention), not a "-thumb" suffixed name.
         $this->assertNotNull($video->thumbnail_path);
-        $this->assertStringContainsString('Landing on Mars [space_vid_123]-thumb.jpg', $video->thumbnail_path);
+        $this->assertStringContainsString('Landing on Mars [space_vid_123].jpg', $video->thumbnail_path);
+        $this->assertStringNotContainsString('-thumb.jpg', $video->thumbnail_path);
 
-        // Confirm Plex/Kodi local assets were written
+        // Confirm Plex local assets were written
         $downloadsDir = Setting::getStoragePath();
-        $channelDir = $downloadsDir . '/Space Channel';
+        $channelDir = $downloadsDir.'/Space Channel';
 
-        $this->assertFileExists($channelDir . '/tvshow.nfo');
-        $tvshowXml = simplexml_load_file($channelDir . '/tvshow.nfo');
+        $this->assertFileExists($channelDir.'/tvshow.nfo');
+        $tvshowXml = simplexml_load_file($channelDir.'/tvshow.nfo');
         $this->assertEquals('Space Channel', (string) $tvshowXml->title);
         $this->assertEquals('A channel about space exploration.', (string) $tvshowXml->plot);
-        $this->assertEquals('poster.jpg', (string) $tvshowXml->thumb);
-        $this->assertEquals('poster', (string) $tvshowXml->thumb['aspect']);
 
-        $this->assertFileExists($channelDir . '/poster.jpg');
-        $this->assertEquals('fake-poster-bytes', file_get_contents($channelDir . '/poster.jpg'));
+        $this->assertFileExists($channelDir.'/poster.jpg');
+        $this->assertEquals('fake-poster-bytes', file_get_contents($channelDir.'/poster.jpg'));
 
-        $videoNfoPath = $downloadsDir . '/' . str_replace('.mp4', '.nfo', $video->file_path);
+        $videoNfoPath = $downloadsDir.'/'.str_replace('.mp4', '.nfo', $video->file_path);
         $this->assertFileExists($videoNfoPath);
         $videoXml = simplexml_load_file($videoNfoPath);
         $this->assertEquals('Landing on Mars', (string) $videoXml->title);
         $this->assertEquals('Humanity lands on Mars for the first time.', (string) $videoXml->plot);
-        $this->assertEquals('Space Channel - s2026e0710 - Landing on Mars [space_vid_123]-thumb.jpg', (string) $videoXml->thumb);
         $this->assertEquals('2026', (string) $videoXml->season);
         $this->assertEquals('0710', (string) $videoXml->episode);
         $this->assertEquals('space_vid_123', (string) $videoXml->uniqueid);
 
         unlink($mockYtDlp);
     }
-
 
     public function test_downloader_handles_permanently_unavailable_videos()
     {
@@ -148,7 +146,7 @@ exit 1
 
         $video->refresh();
         $this->assertEquals('failed', $video->status);
-        $this->assertTrue((bool)$video->prevent_download);
+        $this->assertTrue((bool) $video->prevent_download);
         $this->assertEquals('Private video', $video->unavailable_reason);
         $this->assertStringContainsString('Permanently unavailable', $video->last_error);
 
@@ -187,7 +185,10 @@ exit 1
         Artisan::call('videos:download'); // Fails v3 -> failures = 3 (suspends queue)
 
         // On the third failure, the queue suspends, so v4 and any remaining pending videos are marked as failed
-        $v1->refresh(); $v2->refresh(); $v3->refresh(); $v4->refresh();
+        $v1->refresh();
+        $v2->refresh();
+        $v3->refresh();
+        $v4->refresh();
 
         $this->assertEquals('failed', $v1->status);
         $this->assertEquals('failed', $v2->status);
