@@ -56,6 +56,13 @@ class CheckChannelsForNewVideos extends Command
 
                 $videoId = $metadata['id'] ?? null;
                 $wasLive = $metadata['was_live'] ?? false;
+                $mediaType = $metadata['media_type'] ?? null;
+
+                if ($mediaType === 'short') {
+                    $this->info("Skipping video {$videoId}: YouTube Short.");
+
+                    continue;
+                }
 
                 if ($wasLive) {
                     $this->info("Skipping video {$videoId}: Originated from a live stream.");
