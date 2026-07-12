@@ -5,14 +5,14 @@ namespace App\Console\Commands;
 use App\Models\Setting;
 use App\Models\Video;
 use App\Services\PlexAssetService;
-use Carbon\Carbon;
+use App\Support\PlexNaming;
 use Illuminate\Console\Command;
 
 class BackfillPlexAssets extends Command
 {
     protected $signature = 'plex:backfill-assets';
 
-    protected $description = 'Backfill tvshow.nfo, channel art, and per-video .nfo files for videos that were downloaded before Plex asset generation was implemented, and rename any thumbnail still using the old "-thumb.jpg" suffix that Plex does not recognize.';
+    protected $description = 'Backfill tvshow.nfo, channel art, and per-video .nfo files for videos that were downloaded before Plex asset generation (or the current naming/numbering convention) existed, renaming video/thumbnail files as needed.';
 
     public function handle(PlexAssetService $plexAssets)
     {
@@ -31,6 +31,7 @@ class BackfillPlexAssets extends Command
 
         $syncedChannels = [];
         $videoCount = 0;
+        $renamedVideoCount = 0;
         $renamedThumbCount = 0;
         $skippedCount = 0;
 
@@ -63,26 +64,46 @@ class BackfillPlexAssets extends Command
                 }
             }
 
-            // Plex's "Local Media Assets" agent only recognizes an episode thumbnail that exactly
-            // matches the video's own filename, so rename any thumbnail still using the old
-            // "-thumb.jpg" suffix.
-            if ($video->thumbnail_path && preg_match('/-thumb\.jpg$/', $video->thumbnail_path)) {
-                $oldThumbPath = $downloadsDir.'/'.$video->thumbnail_path;
-                $newThumbnailPath = preg_replace('/-thumb\.jpg$/', '.jpg', $video->thumbnail_path);
+            // Rename the video/thumbnail to the current naming convention if they still use an
+            // older one (missing upload_date_index, or the old "-thumb.jpg" suffix) — otherwise
+            // videos from the same channel uploaded the same day collide into one Plex episode.
+            $videoDir = dirname($fullVideoPath);
+            $correctFilename = PlexNaming::filenameFor($video->channel, $video);
+            $currentFilename = pathinfo($fullVideoPath, PATHINFO_FILENAME);
 
-                if (file_exists($oldThumbPath)) {
-                    rename($oldThumbPath, $downloadsDir.'/'.$newThumbnailPath);
-                    $renamedThumbCount++;
+            if ($currentFilename !== $correctFilename) {
+                $newVideoPath = $videoDir.'/'.$correctFilename.'.'.pathinfo($fullVideoPath, PATHINFO_EXTENSION);
+                rename($fullVideoPath, $newVideoPath);
+
+                $oldNfoPath = $videoDir.'/'.$currentFilename.'.nfo';
+                if (file_exists($oldNfoPath)) {
+                    unlink($oldNfoPath);
                 }
 
-                $video->update(['thumbnail_path' => $newThumbnailPath]);
+                $video->file_path = str_replace($downloadsDir.'/', '', $newVideoPath);
+                $fullVideoPath = $newVideoPath;
+                $renamedVideoCount++;
             }
 
-            $publishedAt = Carbon::parse($video->published_at);
+            if ($video->thumbnail_path && pathinfo($video->thumbnail_path, PATHINFO_FILENAME) !== $correctFilename) {
+                $oldThumbPath = $downloadsDir.'/'.$video->thumbnail_path;
+                if (file_exists($oldThumbPath)) {
+                    $newThumbPath = $videoDir.'/'.$correctFilename.'.jpg';
+                    rename($oldThumbPath, $newThumbPath);
+                    $video->thumbnail_path = str_replace($downloadsDir.'/', '', $newThumbPath);
+                    $renamedThumbCount++;
+                }
+            }
+
+            if ($video->isDirty()) {
+                $video->save();
+            }
+
+            [$year, $episode] = PlexNaming::seasonAndEpisode($video);
             $nfoPath = preg_replace('/\.[^.\/]+$/', '.nfo', $fullVideoPath);
 
             try {
-                $plexAssets->writeVideoNfo($video, $nfoPath, $publishedAt->year, $publishedAt->format('md'));
+                $plexAssets->writeVideoNfo($video, $nfoPath, $year, $episode);
                 $videoCount++;
             } catch (\Throwable $e) {
                 $this->error("Failed to write .nfo for {$video->title}: ".$e->getMessage());
@@ -90,7 +111,10 @@ class BackfillPlexAssets extends Command
             }
         }
 
-        $this->info('Backfill complete. '.count($syncedChannels)." channel(s) synced, {$videoCount} video .nfo file(s) written, {$renamedThumbCount} thumbnail(s) renamed, {$skippedCount} skipped.");
+        $this->info(
+            'Backfill complete. '.count($syncedChannels)." channel(s) synced, {$videoCount} video .nfo file(s) written, "
+            ."{$renamedVideoCount} video file(s) renamed, {$renamedThumbCount} thumbnail(s) renamed, {$skippedCount} skipped."
+        );
 
         return 0;
     }

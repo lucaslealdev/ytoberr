@@ -111,10 +111,80 @@ BASH);
         $this->assertEquals('Landing on Mars', (string) $videoXml->title);
         $this->assertEquals('Humanity lands on Mars for the first time.', (string) $videoXml->plot);
         $this->assertEquals('2026', (string) $videoXml->season);
-        $this->assertEquals('0710', (string) $videoXml->episode);
+        // "0710" (upload month+day) + "99" (upload_date_index, defaults to 99 when this is
+        // the only video from this channel on this date).
+        $this->assertEquals('071099', (string) $videoXml->episode);
         $this->assertEquals('space_vid_123', (string) $videoXml->uniqueid);
 
         unlink($mockYtDlp);
+    }
+
+    public function test_downloader_gives_same_day_videos_distinct_episode_numbers()
+    {
+        // Regression test: two videos from the same channel uploaded on the same calendar date
+        // must not collide into the same s{year}e{monthday} Plex episode slot.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_test_chan_2',
+            'name' => 'News Channel',
+            'url' => 'https://example.com/news',
+        ]);
+
+        $videoOne = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'news_vid_1',
+            'title' => 'Morning Update',
+            'published_at' => '2026-07-11 08:00:00',
+            'status' => 'pending',
+        ]);
+        $videoTwo = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'news_vid_2',
+            'title' => 'Evening Update',
+            'published_at' => '2026-07-11 20:00:00',
+            'status' => 'pending',
+        ]);
+
+        $this->assertEquals(99, $videoOne->upload_date_index);
+        $this->assertEquals(98, $videoTwo->upload_date_index);
+
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_news.sh');
+        file_put_contents($mockYtDlp, <<<'BASH'
+#!/bin/bash
+for arg in "$@"; do
+    if [[ $arg == *video.* ]]; then
+        out_dir=$(dirname "$arg")
+        mkdir -p "$out_dir"
+        echo "dummy video" > "$out_dir/video.mp4"
+        echo "dummy thumb" > "$out_dir/video.jpg"
+        echo "{}" > "$out_dir/video.info.json"
+        exit 0
+    fi
+done
+exit 1
+BASH);
+        chmod($mockYtDlp, 0755);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        // videos:download processes one pending video (oldest created_at first) per call.
+        Artisan::call('videos:download');
+        Artisan::call('videos:download');
+
+        $videoOne->refresh();
+        $videoTwo->refresh();
+
+        $this->assertStringContainsString('s2026e071199', $videoOne->file_path);
+        $this->assertStringContainsString('s2026e071198', $videoTwo->file_path);
+        $this->assertNotEquals($videoOne->file_path, $videoTwo->file_path);
+
+        $downloadsDir = Setting::getStoragePath();
+        $videoOneNfo = simplexml_load_file($downloadsDir.'/'.str_replace('.mp4', '.nfo', $videoOne->file_path));
+        $videoTwoNfo = simplexml_load_file($downloadsDir.'/'.str_replace('.mp4', '.nfo', $videoTwo->file_path));
+
+        $this->assertEquals('071199', (string) $videoOneNfo->episode);
+        $this->assertEquals('071198', (string) $videoTwoNfo->episode);
+
+        unlink($mockYtDlp);
+        exec('rm -rf '.escapeshellarg($downloadsDir.'/News Channel'));
     }
 
     public function test_downloader_handles_permanently_unavailable_videos()

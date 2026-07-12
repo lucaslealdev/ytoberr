@@ -5,14 +5,32 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 class Video extends Model
 {
     protected $fillable = [
         'channel_id', 'youtube_id', 'title', 'description', 'published_at',
         'file_path', 'thumbnail_path', 'status', 'retries', 'last_error',
-        'prevent_download', 'unavailable_reason', 'downloaded_at'
+        'prevent_download', 'unavailable_reason', 'downloaded_at',
     ];
+
+    protected static function booted()
+    {
+        static::creating(function (Video $video) {
+            // Our episode numbering only has day granularity, so videos from the same channel
+            // uploaded on the same calendar date would otherwise collide into the same Plex
+            // episode slot. Counting down from 99 mirrors a channel listing being discovered
+            // newest-first, so already-assigned indexes never need to change retroactively.
+            $date = Carbon::parse($video->published_at)->toDateString();
+
+            $minIndex = static::where('channel_id', $video->channel_id)
+                ->whereRaw('date(published_at) = ?', [$date])
+                ->min('upload_date_index');
+
+            $video->upload_date_index = $minIndex === null ? 99 : $minIndex - 1;
+        });
+    }
 
     public function channel(): BelongsTo
     {
@@ -24,11 +42,11 @@ class Video extends Model
      */
     public function thumbnailUrl(): ?string
     {
-        if (!$this->thumbnail_path) {
+        if (! $this->thumbnail_path) {
             return null;
         }
 
-        if (!file_exists(Setting::getStoragePath() . '/' . $this->thumbnail_path)) {
+        if (! file_exists(Setting::getStoragePath().'/'.$this->thumbnail_path)) {
             return null;
         }
 
@@ -40,11 +58,11 @@ class Video extends Model
      */
     public function videoUrl(): ?string
     {
-        if (!$this->file_path) {
+        if (! $this->file_path) {
             return null;
         }
 
-        if (!file_exists(Setting::getStoragePath() . '/' . $this->file_path)) {
+        if (! file_exists(Setting::getStoragePath().'/'.$this->file_path)) {
             return null;
         }
 
@@ -56,13 +74,13 @@ class Video extends Model
      */
     public function fileSize(): ?int
     {
-        if (!$this->file_path) {
+        if (! $this->file_path) {
             return null;
         }
 
-        $fullPath = Setting::getStoragePath() . '/' . $this->file_path;
+        $fullPath = Setting::getStoragePath().'/'.$this->file_path;
 
-        if (!file_exists($fullPath)) {
+        if (! file_exists($fullPath)) {
             return null;
         }
 
@@ -90,7 +108,7 @@ class Video extends Model
             if ($clean !== '') {
                 // Quoting forces a literal phrase match, so words like "or"/"and"/"not"
                 // can't be misread as FTS5 boolean operators; "*" still prefix-matches.
-                $safeTokens[] = '"' . $clean . '"*';
+                $safeTokens[] = '"'.$clean.'"*';
             }
         }
 
