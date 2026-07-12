@@ -45,10 +45,10 @@ docker run -d --name ytoberr -p 8080:8080 \
   -v ytoberr-database:/var/www/html/database \
   -v ytoberr-storage:/var/www/html/storage/app \
   -v ytoberr-bin:/var/www/html/bin \
-  ghcr.io/<seu-usuario-github>/ytoberr:latest
+  ghcr.io/lucaslealdev/ytoberr:latest
 ```
 
-Se preferir clonar o repositório e usar Docker Compose (builda localmente por padrão; use `YTOBERR_IMAGE=ghcr.io/<seu-usuario-github>/ytoberr:latest docker compose up -d` para baixar a imagem publicada em vez de buildar):
+Se preferir clonar o repositório e usar Docker Compose (builda localmente por padrão; use `YTOBERR_IMAGE=ghcr.io/lucaslealdev/ytoberr:latest docker compose up -d` para baixar a imagem publicada em vez de buildar):
 
 ```bash
 docker compose up -d --build

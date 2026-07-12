@@ -2,7 +2,7 @@ services:
   app:
     # Pulls the published image by default; `docker compose build` (or `up --build`)
     # builds from local source instead and tags it the same, for local development.
-    image: ${YTOBERR_IMAGE:-ghcr.io/<seu-usuario-github>/ytoberr:latest}
+    image: ${YTOBERR_IMAGE:-ghcr.io/lucaslealdev/ytoberr:latest}
     build: .
     restart: unless-stopped
     ports:
