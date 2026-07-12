@@ -73,7 +73,7 @@ ENV APP_ENV=production \
     LOG_CHANNEL=stack \
     LOG_LEVEL=warning \
     DB_CONNECTION=sqlite \
-    DB_DATABASE=/var/www/html/database/database.sqlite \
+    DB_DATABASE=/var/www/html/storage/app/database.sqlite \
     SESSION_DRIVER=database \
     CACHE_STORE=database \
     QUEUE_CONNECTION=database \
@@ -93,7 +93,6 @@ COPY docker/php.ini /usr/local/etc/php/conf.d/zz-ytoberr.ini
 RUN chmod +x /usr/local/bin/entrypoint.sh \
     && mkdir -p \
         bin \
-        database \
         storage/app/public/channels \
         storage/app/public/downloads \
         storage/app/private \
@@ -103,6 +102,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
         storage/framework/views \
         storage/logs \
         bootstrap/cache \
+    && touch storage/app/database.sqlite \
     && ln -sfn /var/www/html/storage/app/public /var/www/html/public/storage \
     && chmod 0600 /etc/crontabs/root
 
@@ -111,7 +111,7 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD curl -fsS "http://127.0.0.1:${APP_PORT}/up" || exit 1
 
-VOLUME ["/var/www/html/database", "/var/www/html/storage/app", "/var/www/html/bin"]
+VOLUME ["/var/www/html/storage/app", "/var/www/html/bin"]
 
 ENTRYPOINT ["entrypoint.sh"]
 CMD ["supervisord", "-c", "/etc/supervisord.conf", "-n"]

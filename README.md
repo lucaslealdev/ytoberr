@@ -42,7 +42,6 @@ Uma imagem pronta (multi-arquitetura, `amd64`/`arm64`) é publicada automaticame
 
 ```bash
 docker run -d --name ytoberr -p 8080:8080 \
-  -v ytoberr-database:/var/www/html/database \
   -v ytoberr-storage:/var/www/html/storage/app \
   -v ytoberr-bin:/var/www/html/bin \
   ghcr.io/lucaslealdev/ytoberr:latest
@@ -58,8 +57,7 @@ A aplicação sobe em `http://localhost:8080` (ajustável via `APP_PORT`/`APP_UR
 
 Dados persistentes (definidos no `docker-compose.yml`):
 
-- `ytoberr-database` (volume nomeado): banco SQLite (`database/database.sqlite`).
-- `ytoberr-storage` (volume nomeado): vídeos, thumbnails e demais arquivos gerados (`storage/app`).
+- `ytoberr-storage` (volume nomeado): banco SQLite (`storage/app/database.sqlite`), vídeos, thumbnails e demais arquivos gerados (`storage/app`). Fica tudo num único volume de propósito porque o SQLite mora dentro de `storage/app` — não há um volume separado para o banco.
 - `./bin` (bind mount para a pasta `bin/` do projeto): se `yt-dlp`/`ffmpeg`/`ffprobe` já existirem aí (por exemplo, de um `make setup-bins` local anterior), o container os reaproveita direto, sem baixar nada. Se a pasta estiver vazia, o container baixa os binários automaticamente e os deixa salvos ali para as próximas subidas.
 
 Variáveis úteis (podem ser definidas num `.env` ao lado do `docker-compose.yml` ou exportadas no shell):
@@ -73,7 +71,6 @@ Sem Docker Compose, o mesmo resultado pode ser obtido com:
 ```bash
 docker build -t ytoberr .
 docker run -d --name ytoberr -p 8080:8080 \
-  -v ytoberr-database:/var/www/html/database \
   -v ytoberr-storage:/var/www/html/storage/app \
   -v "$(pwd)/bin:/var/www/html/bin" \
   ytoberr

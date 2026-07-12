@@ -13,12 +13,15 @@ services:
       APP_KEY: ${APP_KEY:-}
       TZ: ${TZ:-UTC}
     volumes:
-      - ytoberr-database:/var/www/html/database
+      # database.sqlite lives inside storage/app (see DB_DATABASE in the Dockerfile),
+      # so a single directory-level volume persists both the DB and downloaded media.
+      # A volume mounted directly on the database/ directory would also shadow the
+      # migrations shipped there, and some Docker/Podman setups don't reliably
+      # pre-populate a fresh named volume with the image's existing files at that path.
       - ytoberr-storage:/var/www/html/storage/app
       # Bind mount (not a named volume): reuses an existing local ./bin folder as-is,
       # so yt-dlp/ffmpeg/ffprobe are never re-downloaded if they're already present here.
       - ./bin:/var/www/html/bin
 
 volumes:
-  ytoberr-database:
   ytoberr-storage:

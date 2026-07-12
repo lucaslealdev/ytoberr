@@ -10,7 +10,6 @@ php artisan optimize:clear >/dev/null 2>&1 || true
 echo "[entrypoint] Ensuring runtime directories exist..."
 mkdir -p \
     bin \
-    database \
     storage/app/public/channels \
     storage/app/public/downloads \
     storage/app/private \
@@ -52,7 +51,7 @@ if [ -z "${APP_KEY:-}" ]; then
 fi
 
 if [ "${DB_CONNECTION:-sqlite}" = "sqlite" ]; then
-    touch "${DB_DATABASE:-database/database.sqlite}"
+    touch "${DB_DATABASE:-storage/app/database.sqlite}"
 fi
 
 echo "[entrypoint] Running database migrations..."
