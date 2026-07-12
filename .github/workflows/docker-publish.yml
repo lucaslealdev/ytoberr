@@ -1,0 +1,126 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: docker-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-smoke-test:
+    name: Build & smoke test (native arch)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ytoberr:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Prepare fake yt-dlp/ffmpeg/ffprobe (smoke test only)
+        # Avoids depending on yt-dlp's GitHub releases and johnvansickle.com's bandwidth
+        # during CI — this job only verifies the container boots and serves HTTP.
+        run: |
+          mkdir -p /tmp/fake-bin
+          for bin in yt-dlp ffmpeg ffprobe; do
+            printf '#!/bin/sh\necho "fake $0 (CI smoke test)"\n' > "/tmp/fake-bin/$bin"
+            chmod +x "/tmp/fake-bin/$bin"
+          done
+
+      - name: Boot container and wait for healthy status
+        run: |
+          docker run -d --name ytoberr-ci -p 8080:8080 \
+            -v /tmp/fake-bin:/var/www/html/bin \
+            ytoberr:ci
+
+          status=starting
+          for i in $(seq 1 30); do
+            status="$(docker inspect -f '{{.State.Health.Status}}' ytoberr-ci)"
+            if [ "$status" = "healthy" ]; then
+              echo "Container is healthy."
+              break
+            fi
+            if [ "$status" = "unhealthy" ]; then
+              echo "Container reported unhealthy."
+              break
+            fi
+            sleep 5
+          done
+
+          echo "--- container logs ---"
+          docker logs ytoberr-ci
+
+          if [ "$status" != "healthy" ]; then
+            echo "Container never became healthy (last status: $status)."
+            exit 1
+          fi
+
+          curl -fsS http://127.0.0.1:8080/up
+
+  publish:
+    name: Build & push multi-arch image
+    needs: build-and-smoke-test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute lowercase image name
+        run: echo "IMAGE_NAME=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata (tags/labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

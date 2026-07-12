@@ -1,0 +1,24 @@
+services:
+  app:
+    # Pulls the published image by default; `docker compose build` (or `up --build`)
+    # builds from local source instead and tags it the same, for local development.
+    image: ${YTOBERR_IMAGE:-ghcr.io/<seu-usuario-github>/ytoberr:latest}
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:${APP_PORT:-8080}"
+    environment:
+      APP_URL: ${APP_URL:-http://localhost:8080}
+      APP_PORT: ${APP_PORT:-8080}
+      APP_KEY: ${APP_KEY:-}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - ytoberr-database:/var/www/html/database
+      - ytoberr-storage:/var/www/html/storage/app
+      # Bind mount (not a named volume): reuses an existing local ./bin folder as-is,
+      # so yt-dlp/ffmpeg/ffprobe are never re-downloaded if they're already present here.
+      - ./bin:/var/www/html/bin
+
+volumes:
+  ytoberr-database:
+  ytoberr-storage:

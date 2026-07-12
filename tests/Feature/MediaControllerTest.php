@@ -1,0 +1,73 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Setting;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class MediaControllerTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function tearDown(): void
+    {
+        $downloadsDir = Setting::getStoragePath();
+        if (file_exists($downloadsDir . '/Media Test Channel')) {
+            exec('rm -rf ' . escapeshellarg($downloadsDir . '/Media Test Channel'));
+        }
+
+        parent::tearDown();
+    }
+
+    public function test_show_returns_existing_file_with_correct_content_and_content_type()
+    {
+        $user = User::factory()->create();
+
+        $downloadsDir = Setting::getStoragePath();
+        @mkdir($downloadsDir . '/Media Test Channel', 0755, true);
+
+        $relativePath = 'Media Test Channel/note.txt';
+        $contents = 'hello media controller test';
+        file_put_contents($downloadsDir . '/' . $relativePath, $contents);
+
+        $response = $this->actingAs($user)->get('/media/' . $relativePath);
+
+        $response->assertStatus(200);
+        $this->assertStringStartsWith('text/plain', $response->headers->get('Content-Type'));
+        $this->assertSame($contents, $response->streamedContent());
+    }
+
+    public function test_show_returns_404_for_a_nonexistent_file()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get('/media/Media Test Channel/does-not-exist.mp4');
+
+        $response->assertStatus(404);
+    }
+
+    public function test_path_traversal_attempt_does_not_leak_files_outside_downloads_dir()
+    {
+        $user = User::factory()->create();
+
+        // Make sure there is a real file to be leaked if the traversal protection failed.
+        $this->assertFileExists('/etc/passwd');
+
+        $response = $this->actingAs($user)->get('/media/..%2F..%2F..%2Fetc%2Fpasswd');
+
+        $response->assertStatus(404);
+        $response->assertDontSee('root:', false);
+    }
+
+    public function test_path_traversal_attempt_with_literal_dots_is_also_blocked()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get('/media/../../../../../../etc/passwd');
+
+        $response->assertStatus(404);
+        $response->assertDontSee('root:', false);
+    }
+}

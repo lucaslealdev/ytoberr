@@ -1,0 +1,66 @@
+# Version control & IDE
+.git
+.gitattributes
+.github
+.idea
+.vscode
+.zed
+.nova
+.cursor/
+.codex
+.phpactor.json
+
+# Dependencies (installed fresh inside the image)
+/vendor
+/node_modules
+
+# Runtime binaries & data (downloaded/generated at container startup)
+/bin
+/database/database.sqlite
+/storage/app/*
+!/storage/app/.gitkeep
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/testing/*
+/storage/framework/views/*
+/storage/logs/*
+!/storage/logs/.gitkeep
+/storage/pail
+/storage/queue.pid
+
+# Env & local config
+.env
+.env.*
+!.env.example
+.mcp.json
+opencode.json
+boost.json
+
+# Build tooling caches
+/public/build
+/public/hot
+/public/storage
+/bootstrap/cache/*.php
+.phpunit.cache
+.phpunit.result.cache
+
+# Agent / assistant scratch and reference docs (not needed at runtime)
+.agents
+.claude
+.localdocs
+AGENTS.md
+CLAUDE.md
+GEMINI.MD
+pinchflat.MD
+pinchflat-master
+yt-dlp.md
+
+Homestead.json
+Homestead.yaml
+Thumbs.db
+.DS_Store
+
+# Test suite (not needed at runtime)
+/tests
+phpunit.xml
+.env.testing

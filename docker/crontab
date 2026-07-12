@@ -1,0 +1,3 @@
+# Ytoberr - Laravel scheduler
+# Drives every schedule defined in routes/console.php (channel polling, download queue processing, etc.)
+* * * * * . /etc/container-env.sh; cd /var/www/html && php artisan schedule:run >> /var/www/html/storage/logs/schedule.log 2>&1
