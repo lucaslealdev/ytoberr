@@ -103,9 +103,14 @@ class RealChannelIntegrationTest extends TestCase
             exec('rm -rf '.escapeshellarg($channelDir));
         }
 
+        $tempDirsBefore = glob(storage_path('app/temp/*'), GLOB_ONLYDIR);
+
         app(ChannelService::class)->fetchAndStoreChannelImages($channel);
 
         $this->assertTrue(Storage::disk('public')->exists('channels/'.$channel->id.'/poster.jpg'), 'File not found: '.'channels/'.$channel->id.'/poster.jpg'.'. Found: '.implode(', ', Storage::disk('public')->allFiles('channels')));
+
+        $newTempDirs = array_diff(glob(storage_path('app/temp/*'), GLOB_ONLYDIR), $tempDirsBefore);
+        $this->assertEmpty($newTempDirs, 'fetchAndStoreChannelImages() left orphaned temp directories behind: '.implode(', ', $newTempDirs));
     }
 
     public function test_can_view_channel_details_page()
