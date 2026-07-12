@@ -24,8 +24,8 @@ class BackfillPlexAssetsTest extends TestCase
     {
         $downloadsDir = Setting::getStoragePath();
         foreach (['Backfill Channel', 'Channel Without File'] as $dir) {
-            if (file_exists($downloadsDir . '/' . $dir)) {
-                exec('rm -rf ' . escapeshellarg($downloadsDir . '/' . $dir));
+            if (file_exists($downloadsDir.'/'.$dir)) {
+                exec('rm -rf '.escapeshellarg($downloadsDir.'/'.$dir));
             }
         }
 
@@ -41,15 +41,15 @@ class BackfillPlexAssetsTest extends TestCase
             'description' => 'A channel that predates Plex asset generation.',
         ]);
 
-        Storage::disk('public')->put('channels/' . $channel->id . '/poster.jpg', 'fake-poster-bytes');
+        Storage::disk('public')->put('channels/'.$channel->id.'/poster.jpg', 'fake-poster-bytes');
 
         $downloadsDir = Setting::getStoragePath();
-        $videoDir = $downloadsDir . '/Backfill Channel/Season 2026';
+        $videoDir = $downloadsDir.'/Backfill Channel/Season 2026';
         mkdir($videoDir, 0755, true);
         $relativeVideoPath = 'Backfill Channel/Season 2026/Backfill Channel - s2026e0710 - Old Video [old_vid_1].mp4';
         $relativeThumbPath = 'Backfill Channel/Season 2026/Backfill Channel - s2026e0710 - Old Video [old_vid_1]-thumb.jpg';
-        file_put_contents($downloadsDir . '/' . $relativeVideoPath, 'fake video bytes');
-        file_put_contents($downloadsDir . '/' . $relativeThumbPath, 'fake thumb bytes');
+        file_put_contents($downloadsDir.'/'.$relativeVideoPath, 'fake video bytes');
+        file_put_contents($downloadsDir.'/'.$relativeThumbPath, 'fake thumb bytes');
 
         $video = Video::create([
             'channel_id' => $channel->id,
@@ -67,22 +67,33 @@ class BackfillPlexAssetsTest extends TestCase
 
         $this->assertStringContainsString('1 channel(s) synced', $output);
         $this->assertStringContainsString('1 video .nfo file(s) written', $output);
+        $this->assertStringContainsString('1 thumbnail(s) renamed', $output);
 
-        $channelDir = $downloadsDir . '/Backfill Channel';
-        $this->assertFileExists($channelDir . '/tvshow.nfo');
-        $tvshowXml = simplexml_load_file($channelDir . '/tvshow.nfo');
+        $channelDir = $downloadsDir.'/Backfill Channel';
+        $this->assertFileExists($channelDir.'/tvshow.nfo');
+        $tvshowXml = simplexml_load_file($channelDir.'/tvshow.nfo');
         $this->assertEquals('Backfill Channel', (string) $tvshowXml->title);
         $this->assertEquals('A channel that predates Plex asset generation.', (string) $tvshowXml->plot);
 
-        $this->assertFileExists($channelDir . '/poster.jpg');
-        $this->assertEquals('fake-poster-bytes', file_get_contents($channelDir . '/poster.jpg'));
+        $this->assertFileExists($channelDir.'/poster.jpg');
+        $this->assertEquals('fake-poster-bytes', file_get_contents($channelDir.'/poster.jpg'));
 
-        $videoNfoPath = $videoDir . '/Backfill Channel - s2026e0710 - Old Video [old_vid_1].nfo';
+        // The old "-thumb.jpg" file must be renamed to exactly match the video's filename
+        // (Plex's Local Media Assets convention), both on disk and in the DB column.
+        $this->assertFileDoesNotExist($downloadsDir.'/'.$relativeThumbPath);
+        $renamedThumbPath = $videoDir.'/Backfill Channel - s2026e0710 - Old Video [old_vid_1].jpg';
+        $this->assertFileExists($renamedThumbPath);
+        $this->assertEquals('fake thumb bytes', file_get_contents($renamedThumbPath));
+        $this->assertEquals(
+            'Backfill Channel/Season 2026/Backfill Channel - s2026e0710 - Old Video [old_vid_1].jpg',
+            $video->fresh()->thumbnail_path
+        );
+
+        $videoNfoPath = $videoDir.'/Backfill Channel - s2026e0710 - Old Video [old_vid_1].nfo';
         $this->assertFileExists($videoNfoPath);
         $videoXml = simplexml_load_file($videoNfoPath);
         $this->assertEquals('Old Video', (string) $videoXml->title);
         $this->assertEquals('This video was downloaded before .nfo generation existed.', (string) $videoXml->plot);
-        $this->assertEquals('Backfill Channel - s2026e0710 - Old Video [old_vid_1]-thumb.jpg', (string) $videoXml->thumb);
         $this->assertEquals('2026', (string) $videoXml->season);
         $this->assertEquals('0710', (string) $videoXml->episode);
         $this->assertEquals('old_vid_1', (string) $videoXml->uniqueid);
@@ -119,6 +130,6 @@ class BackfillPlexAssetsTest extends TestCase
         $output = Artisan::output();
 
         $this->assertStringContainsString('Skipping Missing Video: file not found', $output);
-        $this->assertStringContainsString('0 channel(s) synced, 0 video .nfo file(s) written, 1 skipped', $output);
+        $this->assertStringContainsString('0 channel(s) synced, 0 video .nfo file(s) written, 0 thumbnail(s) renamed, 1 skipped', $output);
     }
 }

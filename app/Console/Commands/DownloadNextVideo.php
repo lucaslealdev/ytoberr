@@ -15,6 +15,7 @@ use Illuminate\Support\Str;
 class DownloadNextVideo extends Command
 {
     protected $signature = 'videos:download';
+
     protected $description = 'Pulls the next pending video from the database queue and downloads it using yt-dlp, storing it alongside a companion thumbnail using Plex-friendly naming.';
 
     public function handle(PlexAssetService $plexAssets)
@@ -28,8 +29,9 @@ class DownloadNextVideo extends Command
             ->orderBy('created_at', 'asc')
             ->first();
 
-        if (!$video) {
+        if (! $video) {
             $this->info('No pending videos in the queue.');
+
             return 0;
         }
 
@@ -39,7 +41,7 @@ class DownloadNextVideo extends Command
         $video->update(['status' => 'downloading']);
 
         // 3. Create temp directory
-        $tempDir = storage_path('app/temp/' . Str::random(16));
+        $tempDir = storage_path('app/temp/'.Str::random(16));
         mkdir($tempDir, 0755, true);
 
         $ytDlp = config('services.ytdlp_path', base_path('bin/yt-dlp'));
@@ -47,14 +49,18 @@ class DownloadNextVideo extends Command
         // Resolve download quality format
         $quality = $video->channel->download_quality ?? '720p';
         $heightLimit = 720;
-        if ($quality === '1080p') $heightLimit = 1080;
-        if ($quality === '480p') $heightLimit = 480;
+        if ($quality === '1080p') {
+            $heightLimit = 1080;
+        }
+        if ($quality === '480p') {
+            $heightLimit = 480;
+        }
 
         $formatString = "-f \"bv*[height<={$heightLimit}]+ba/b[height<={$heightLimit}]\"";
 
         // Template and temporary paths
-        $outputTemplate = $tempDir . '/video.%(ext)s';
-        $infoJsonPath = $tempDir . '/video.info.json';
+        $outputTemplate = $tempDir.'/video.%(ext)s';
+        $infoJsonPath = $tempDir.'/video.info.json';
 
         // Base yt-dlp arguments
         $arguments = [
@@ -62,21 +68,21 @@ class DownloadNextVideo extends Command
             '--write-thumbnail',
             '--convert-thumbnails jpg',
             '--write-info-json',
-            '--output ' . escapeshellarg($outputTemplate),
+            '--output '.escapeshellarg($outputTemplate),
         ];
 
         // Cookies support if present
         $cookiePath = storage_path('app/cookies.txt');
         if (file_exists($cookiePath)) {
-            $arguments[] = '--cookies ' . escapeshellarg($cookiePath);
+            $arguments[] = '--cookies '.escapeshellarg($cookiePath);
         }
 
         $argumentsString = implode(' ', $arguments);
-        $url = "https://www.youtube.com/watch?v=" . $video->youtube_id;
-        $command = "{$ytDlp} {$argumentsString} " . escapeshellarg($url) . " 2>&1";
+        $url = 'https://www.youtube.com/watch?v='.$video->youtube_id;
+        $command = "{$ytDlp} {$argumentsString} ".escapeshellarg($url).' 2>&1';
 
-        $this->info("Running yt-dlp download...");
-        Log::info("DownloadNextVideo executing: " . $command);
+        $this->info('Running yt-dlp download...');
+        Log::info('DownloadNextVideo executing: '.$command);
 
         $output = [];
         $resultCode = 0;
@@ -86,12 +92,12 @@ class DownloadNextVideo extends Command
 
         if ($resultCode === 0) {
             // Success! Move the downloaded files into place as-is (no transcoding/remuxing).
-            $this->info("Download succeeded! Resolving files...");
+            $this->info('Download succeeded! Resolving files...');
 
             // Find downloaded video file in tempDir (e.g. video.mp4, video.mkv, video.webm)
-            $videoFiles = glob($tempDir . '/video.*');
+            $videoFiles = glob($tempDir.'/video.*');
             $videoFile = null;
-            $thumbFile = $tempDir . '/video.jpg'; // Converted to jpg
+            $thumbFile = $tempDir.'/video.jpg'; // Converted to jpg
 
             foreach ($videoFiles as $file) {
                 $ext = pathinfo($file, PATHINFO_EXTENSION);
@@ -101,14 +107,15 @@ class DownloadNextVideo extends Command
                 }
             }
 
-            if (!$videoFile || !file_exists($videoFile)) {
-                $this->error("Downloaded video file not found in temp directory.");
+            if (! $videoFile || ! file_exists($videoFile)) {
+                $this->error('Downloaded video file not found in temp directory.');
                 $video->update([
                     'status' => 'failed',
                     'last_error' => 'Video file not found after download.',
                 ]);
                 $this->handleFailure($video, 'Video file not found after download.');
                 $this->cleanup($tempDir);
+
                 return 1;
             }
 
@@ -124,34 +131,35 @@ class DownloadNextVideo extends Command
             $safeTitle = PlexNaming::sanitize($video->title);
             $filename = "{$safeChannelName} - s{$year}e{$monthDay} - {$safeTitle} [{$video->youtube_id}]";
 
-            $targetDir = $downloadsDir . '/' . $safeChannelName . '/Season ' . $year;
-            if (!file_exists($targetDir)) {
+            $targetDir = $downloadsDir.'/'.$safeChannelName.'/Season '.$year;
+            if (! file_exists($targetDir)) {
                 mkdir($targetDir, 0755, true);
             }
 
             $ext = pathinfo($videoFile, PATHINFO_EXTENSION);
-            $targetFile = $targetDir . '/' . $filename . '.' . $ext;
+            $targetFile = $targetDir.'/'.$filename.'.'.$ext;
             copy($videoFile, $targetFile);
 
             // Build relative file path for database storage
-            $relativePath = str_replace($downloadsDir . '/', '', $targetFile);
+            $relativePath = str_replace($downloadsDir.'/', '', $targetFile);
 
-            // Copy thumbnail to destination folder as {nome-do-arquivo}-thumb.jpg for Plex compatibility
+            // Copy thumbnail to destination folder as {nome-do-arquivo}.jpg: Plex's "Local Media
+            // Assets" agent only recognizes an episode thumbnail that exactly matches the video's
+            // own filename (just with an image extension instead), not a "-thumb" suffixed name.
             $hasThumb = file_exists($thumbFile);
             if ($hasThumb) {
-                copy($thumbFile, $targetDir . '/' . $filename . '-thumb.jpg');
-                $video->update(['thumbnail_path' => str_replace($downloadsDir . '/', '', $targetDir . '/' . $filename . '-thumb.jpg')]);
+                copy($thumbFile, $targetDir.'/'.$filename.'.jpg');
+                $video->update(['thumbnail_path' => str_replace($downloadsDir.'/', '', $targetDir.'/'.$filename.'.jpg')]);
             }
 
-            // Write Plex/Kodi local assets (tvshow.nfo + channel art, per-video .nfo).
+            // Write Plex local assets (tvshow.nfo + channel art, per-video .nfo).
             // Best-effort: a metadata write hiccup shouldn't turn a successful download into a failure.
             try {
-                $channelDir = $downloadsDir . '/' . $safeChannelName;
+                $channelDir = $downloadsDir.'/'.$safeChannelName;
                 $plexAssets->syncChannelAssets($video->channel, $channelDir);
-                $thumbFilename = $hasThumb ? $filename . '-thumb.jpg' : null;
-                $plexAssets->writeVideoNfo($video, $targetDir . '/' . $filename . '.nfo', $year, $monthDay, $thumbFilename);
+                $plexAssets->writeVideoNfo($video, $targetDir.'/'.$filename.'.nfo', $year, $monthDay);
             } catch (\Throwable $e) {
-                Log::warning("Failed to write Plex metadata assets for video {$video->youtube_id}: " . $e->getMessage());
+                Log::warning("Failed to write Plex metadata assets for video {$video->youtube_id}: ".$e->getMessage());
             }
 
             // 5. Update Database Record
@@ -168,12 +176,14 @@ class DownloadNextVideo extends Command
 
             $this->info("Successfully downloaded video: {$video->title}");
             $this->cleanup($tempDir);
+
             return 0;
         } else {
             // Download Failed! Handle resilient error catching
             $this->error("Download failed for video {$video->youtube_id}");
             $this->handleFailure($video, $rawOutput);
             $this->cleanup($tempDir);
+
             return 1;
         }
     }
@@ -197,18 +207,25 @@ class DownloadNextVideo extends Command
 
         if ($isUnavailable) {
             $reason = 'Video is private, removed or unavailable';
-            if (Str::contains($errorOutputLower, 'private video')) $reason = 'Private video';
-            if (Str::contains($errorOutputLower, 'removed')) $reason = 'Video removed';
-            if (Str::contains($errorOutputLower, 'members-only')) $reason = 'Members-only content';
+            if (Str::contains($errorOutputLower, 'private video')) {
+                $reason = 'Private video';
+            }
+            if (Str::contains($errorOutputLower, 'removed')) {
+                $reason = 'Video removed';
+            }
+            if (Str::contains($errorOutputLower, 'members-only')) {
+                $reason = 'Members-only content';
+            }
 
             $video->update([
                 'status' => 'failed',
                 'prevent_download' => true,
                 'unavailable_reason' => $reason,
-                'last_error' => 'Permanently unavailable: ' . $reason,
+                'last_error' => 'Permanently unavailable: '.$reason,
             ]);
 
             Log::warning("Video {$video->youtube_id} marked as permanently unavailable: {$reason}");
+
             return;
         }
 
@@ -220,6 +237,7 @@ class DownloadNextVideo extends Command
                 'status' => 'pending',
                 'last_error' => 'SponsorBlock temporary communication error.',
             ]);
+
             return;
         }
 
@@ -235,7 +253,7 @@ class DownloadNextVideo extends Command
 
         if ($needsCookies) {
             Log::warning("Authentication issue detected for {$video->youtube_id}. Moving video to end of queue to retry later.");
-            
+
             if ($retries >= 3) {
                 $video->update([
                     'status' => 'failed',
@@ -252,6 +270,7 @@ class DownloadNextVideo extends Command
                 ]);
             }
             $this->incrementConsecutiveFailures();
+
             return;
         }
 
@@ -280,12 +299,12 @@ class DownloadNextVideo extends Command
      */
     private function incrementConsecutiveFailures(): void
     {
-        $failures = (int)Setting::get('consecutive_failures', '0') + 1;
-        Setting::set('consecutive_failures', (string)$failures);
+        $failures = (int) Setting::get('consecutive_failures', '0') + 1;
+        Setting::set('consecutive_failures', (string) $failures);
 
         if ($failures >= 3) {
-            Log::critical("3 consecutive downloads failed! Suspending all pending downloads in queue due to suspected generalized failure.");
-            
+            Log::critical('3 consecutive downloads failed! Suspending all pending downloads in queue due to suspected generalized failure.');
+
             // Mark all remaining pending videos in the queue as failed
             Video::where('status', 'pending')
                 ->where('prevent_download', false)
@@ -302,8 +321,7 @@ class DownloadNextVideo extends Command
     private function cleanup(string $dir): void
     {
         if (file_exists($dir)) {
-            exec("rm -rf " . escapeshellarg($dir));
+            exec('rm -rf '.escapeshellarg($dir));
         }
     }
-
 }
