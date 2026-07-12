@@ -108,7 +108,7 @@ class ChannelController extends Controller
     }
 
     /**
-     * Best-effort, opt-in removal of a channel's downloaded files from disk.
+     * Best-effort, opt-in removal of a channel's downloaded files and stored images from disk.
      *
      * Resolves the channel folder exactly as PlexAssetService/DownloadNextVideo do,
      * then verifies (via realpath containment, same technique as MediaController::show())
@@ -119,6 +119,10 @@ class ChannelController extends Controller
      */
     private function deleteChannelFilesFromDisk(Channel $channel): void
     {
+        // Internally stored channel art (poster/banner/fanart): both what our own UI displays
+        // and the source PlexAssetService copies into the Plex show folder.
+        Storage::disk('public')->deleteDirectory('channels/'.$channel->id);
+
         $downloadsDir = realpath(Setting::getStoragePath());
         if (! $downloadsDir) {
             return;

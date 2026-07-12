@@ -121,8 +121,8 @@
                 <label class="flex items-start gap-2 text-sm text-gray-300 bg-gray-950 border border-gray-800 rounded p-3 cursor-pointer select-none">
                     <input type="checkbox" name="delete_files" value="1" class="mt-0.5 rounded border-gray-600 bg-gray-800">
                     <span>
-                        Also delete downloaded files from disk
-                        <span class="block text-xs text-gray-500 mt-0.5">Permanently removes this channel's downloaded videos, thumbnails and metadata files. This cannot be undone.</span>
+                        Also delete downloaded files and images from disk
+                        <span class="block text-xs text-gray-500 mt-0.5">Permanently removes this channel's downloaded videos, thumbnails and metadata files, as well as its stored poster, banner and fanart images. This cannot be undone.</span>
                     </span>
                 </label>
 

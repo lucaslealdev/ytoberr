@@ -7,6 +7,7 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Models\Video;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Number;
 use Tests\TestCase;
 
@@ -23,8 +24,8 @@ class ChannelViewsTest extends TestCase
             'Delete Files On Channel',
             'Delete Files Missing Folder Channel',
         ] as $dir) {
-            if (file_exists($downloadsDir . '/' . $dir)) {
-                exec('rm -rf ' . escapeshellarg($downloadsDir . '/' . $dir));
+            if (file_exists($downloadsDir.'/'.$dir)) {
+                exec('rm -rf '.escapeshellarg($downloadsDir.'/'.$dir));
             }
         }
 
@@ -46,7 +47,7 @@ class ChannelViewsTest extends TestCase
         $indexResponse->assertDontSee('name="quality"', false);
         $indexResponse->assertSee('720p');
 
-        $showResponse = $this->actingAs($user)->get('/channels/' . $channel->id);
+        $showResponse = $this->actingAs($user)->get('/channels/'.$channel->id);
         $showResponse->assertStatus(200);
         $showResponse->assertSee('name="quality"', false);
         $showResponse->assertSee('Cut-off Date');
@@ -63,7 +64,7 @@ class ChannelViewsTest extends TestCase
             'download_quality' => '720p',
         ]);
 
-        $response = $this->actingAs($user)->patch('/channels/' . $channel->id . '/quality', [
+        $response = $this->actingAs($user)->patch('/channels/'.$channel->id.'/quality', [
             'quality' => '1080p',
         ]);
 
@@ -89,7 +90,7 @@ class ChannelViewsTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertSee('id="delete-channel-modal"', false);
-        $response->assertSee('Also delete downloaded files from disk');
+        $response->assertSee('Also delete downloaded files and images from disk');
 
         // Exactly one checkbox for the whole page (the shared modal's), not one per card.
         $this->assertSame(
@@ -111,13 +112,13 @@ class ChannelViewsTest extends TestCase
         ]);
 
         $downloadsDir = Setting::getStoragePath();
-        $videoDir = $downloadsDir . '/Size Channel/Season 2026';
+        $videoDir = $downloadsDir.'/Size Channel/Season 2026';
         mkdir($videoDir, 0755, true);
 
         $relativePath1 = 'Size Channel/Season 2026/video-1.mp4';
         $relativePath2 = 'Size Channel/Season 2026/video-2.mp4';
-        file_put_contents($downloadsDir . '/' . $relativePath1, str_repeat('a', 1_000_000));
-        file_put_contents($downloadsDir . '/' . $relativePath2, str_repeat('b', 500_000));
+        file_put_contents($downloadsDir.'/'.$relativePath1, str_repeat('a', 1_000_000));
+        file_put_contents($downloadsDir.'/'.$relativePath2, str_repeat('b', 500_000));
 
         Video::create([
             'channel_id' => $channel->id,
@@ -152,7 +153,7 @@ class ChannelViewsTest extends TestCase
         $indexResponse->assertStatus(200);
         $indexResponse->assertSee($expectedSize);
 
-        $showResponse = $this->actingAs($user)->get('/channels/' . $channel->id);
+        $showResponse = $this->actingAs($user)->get('/channels/'.$channel->id);
         $showResponse->assertStatus(200);
         $showResponse->assertSee($expectedSize);
     }
@@ -163,9 +164,9 @@ class ChannelViewsTest extends TestCase
 
         for ($i = 1; $i <= 12; $i++) {
             Channel::create([
-                'youtube_id' => 'UC_page_chan_' . $i,
-                'name' => 'Page Channel ' . str_pad($i, 2, '0', STR_PAD_LEFT),
-                'url' => 'https://example.com/page' . $i,
+                'youtube_id' => 'UC_page_chan_'.$i,
+                'name' => 'Page Channel '.str_pad($i, 2, '0', STR_PAD_LEFT),
+                'url' => 'https://example.com/page'.$i,
             ]);
         }
 
@@ -194,21 +195,21 @@ class ChannelViewsTest extends TestCase
         for ($i = 1; $i <= 12; $i++) {
             Video::create([
                 'channel_id' => $channel->id,
-                'youtube_id' => 'video_page_vid_' . $i,
-                'title' => 'Video Page Item ' . str_pad($i, 2, '0', STR_PAD_LEFT),
+                'youtube_id' => 'video_page_vid_'.$i,
+                'title' => 'Video Page Item '.str_pad($i, 2, '0', STR_PAD_LEFT),
                 'published_at' => now()->subMinutes($i),
                 'status' => 'completed',
             ]);
         }
 
-        $page1 = $this->actingAs($user)->get('/channels/' . $channel->id);
+        $page1 = $this->actingAs($user)->get('/channels/'.$channel->id);
         $page1->assertStatus(200);
         $page1->assertSee('Video Page Item 01');
         $page1->assertSee('Video Page Item 10');
         $page1->assertDontSee('Video Page Item 11');
         $page1->assertSee('Page 1 of 2');
 
-        $page2 = $this->actingAs($user)->get('/channels/' . $channel->id . '?page=2');
+        $page2 = $this->actingAs($user)->get('/channels/'.$channel->id.'?page=2');
         $page2->assertStatus(200);
         $page2->assertSee('Video Page Item 11');
         $page2->assertSee('Video Page Item 12');
@@ -239,7 +240,7 @@ class ChannelViewsTest extends TestCase
             'status' => 'completed',
         ]);
 
-        $response = $this->actingAs($user)->get('/channels/' . $channel->id . '?video_sort=title');
+        $response = $this->actingAs($user)->get('/channels/'.$channel->id.'?video_sort=title');
         $response->assertStatus(200);
 
         $content = $response->getContent();
@@ -270,9 +271,9 @@ class ChannelViewsTest extends TestCase
         ]);
 
         $response = $this->actingAs($user)
-            ->from('/channels/' . $channel->id)
+            ->from('/channels/'.$channel->id)
             ->followingRedirects()
-            ->patch('/channels/' . $channel->id . '/quality', ['quality' => '1080p']);
+            ->patch('/channels/'.$channel->id.'/quality', ['quality' => '1080p']);
 
         $response->assertStatus(200);
         $response->assertSee('Quality updated successfully!');
@@ -290,9 +291,9 @@ class ChannelViewsTest extends TestCase
         ]);
 
         $response = $this->actingAs($user)
-            ->from('/channels/' . $channel->id)
+            ->from('/channels/'.$channel->id)
             ->followingRedirects()
-            ->patch('/channels/' . $channel->id . '/cutoff', ['cutoff_date' => '2026-01-01']);
+            ->patch('/channels/'.$channel->id.'/cutoff', ['cutoff_date' => '2026-01-01']);
 
         $response->assertStatus(200);
         $response->assertSee('Cut-off date updated successfully!');
@@ -301,6 +302,8 @@ class ChannelViewsTest extends TestCase
 
     public function test_deleting_channel_without_delete_files_flag_preserves_files_on_disk()
     {
+        Storage::fake('public');
+
         $user = User::factory()->create();
         $channel = Channel::create([
             'youtube_id' => 'UC_delete_off_chan',
@@ -309,20 +312,25 @@ class ChannelViewsTest extends TestCase
         ]);
 
         $downloadsDir = Setting::getStoragePath();
-        $channelDir = $downloadsDir . '/Delete Files Off Channel';
+        $channelDir = $downloadsDir.'/Delete Files Off Channel';
         mkdir($channelDir, 0755, true);
-        $filePath = $channelDir . '/keepme.mp4';
+        $filePath = $channelDir.'/keepme.mp4';
         file_put_contents($filePath, 'video bytes');
 
-        $response = $this->actingAs($user)->delete('/channels/' . $channel->id);
+        Storage::disk('public')->put('channels/'.$channel->id.'/poster.jpg', 'poster bytes');
+
+        $response = $this->actingAs($user)->delete('/channels/'.$channel->id);
 
         $response->assertRedirect('/channels');
         $this->assertNull(Channel::find($channel->id));
         $this->assertFileExists($filePath);
+        Storage::disk('public')->assertExists('channels/'.$channel->id.'/poster.jpg');
     }
 
     public function test_deleting_channel_with_delete_files_flag_removes_folder_from_disk()
     {
+        Storage::fake('public');
+
         $user = User::factory()->create();
         $channel = Channel::create([
             'youtube_id' => 'UC_delete_on_chan',
@@ -331,15 +339,18 @@ class ChannelViewsTest extends TestCase
         ]);
 
         $downloadsDir = Setting::getStoragePath();
-        $channelDir = $downloadsDir . '/Delete Files On Channel';
+        $channelDir = $downloadsDir.'/Delete Files On Channel';
         mkdir($channelDir, 0755, true);
-        file_put_contents($channelDir . '/removeme.mp4', 'video bytes');
+        file_put_contents($channelDir.'/removeme.mp4', 'video bytes');
 
-        $response = $this->actingAs($user)->delete('/channels/' . $channel->id, ['delete_files' => '1']);
+        Storage::disk('public')->put('channels/'.$channel->id.'/poster.jpg', 'poster bytes');
+
+        $response = $this->actingAs($user)->delete('/channels/'.$channel->id, ['delete_files' => '1']);
 
         $response->assertRedirect('/channels');
         $this->assertNull(Channel::find($channel->id));
         $this->assertDirectoryDoesNotExist($channelDir);
+        Storage::disk('public')->assertMissing('channels/'.$channel->id.'/poster.jpg');
     }
 
     public function test_deleting_channel_with_delete_files_flag_but_no_folder_on_disk_does_not_error()
@@ -354,7 +365,7 @@ class ChannelViewsTest extends TestCase
         // Note: the channel folder is deliberately never created on disk, so the
         // realpath()-based containment guard in ChannelController must resolve to
         // false and silently skip deletion instead of throwing.
-        $response = $this->actingAs($user)->delete('/channels/' . $channel->id, ['delete_files' => '1']);
+        $response = $this->actingAs($user)->delete('/channels/'.$channel->id, ['delete_files' => '1']);
 
         $response->assertRedirect('/channels');
         $this->assertNull(Channel::find($channel->id));
@@ -375,15 +386,15 @@ class ChannelViewsTest extends TestCase
         ]);
 
         $downloadsDir = Setting::getStoragePath();
-        if (!file_exists($downloadsDir)) {
+        if (! file_exists($downloadsDir)) {
             mkdir($downloadsDir, 0755, true);
         }
         $parentDir = dirname($downloadsDir);
-        $canaryFile = $parentDir . '/canary.txt';
+        $canaryFile = $parentDir.'/canary.txt';
         file_put_contents($canaryFile, 'must survive channel deletion');
 
         try {
-            $response = $this->actingAs($user)->delete('/channels/' . $channel->id, ['delete_files' => '1']);
+            $response = $this->actingAs($user)->delete('/channels/'.$channel->id, ['delete_files' => '1']);
 
             $response->assertRedirect('/channels');
             $this->assertNull(Channel::find($channel->id));
