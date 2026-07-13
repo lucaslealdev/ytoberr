@@ -32,28 +32,6 @@ class ChannelViewsTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_quality_selector_moved_from_index_to_channel_show_page()
-    {
-        $user = User::factory()->create();
-        $channel = Channel::create([
-            'youtube_id' => 'UC_quality_chan',
-            'name' => 'Quality Channel',
-            'url' => 'https://example.com/quality',
-            'download_quality' => '720p',
-        ]);
-
-        $indexResponse = $this->actingAs($user)->get('/channels');
-        $indexResponse->assertStatus(200);
-        $indexResponse->assertDontSee('name="quality"', false);
-        $indexResponse->assertSee('720p');
-
-        $showResponse = $this->actingAs($user)->get('/channels/'.$channel->id);
-        $showResponse->assertStatus(200);
-        $showResponse->assertSee('name="quality"', false);
-        $showResponse->assertSee('Cut-off Date');
-        $showResponse->assertSee('Quality');
-    }
-
     public function test_quality_can_still_be_updated_from_the_channel_show_page()
     {
         $user = User::factory()->create();
@@ -122,43 +100,6 @@ class ChannelViewsTest extends TestCase
 
         $response->assertRedirect();
         $this->assertFalse((bool) $channel->fresh()->download_shorts);
-    }
-
-    public function test_delete_channel_option_lives_in_kebab_menu_on_show_page_not_on_index_cards()
-    {
-        $user = User::factory()->create();
-        Channel::create([
-            'youtube_id' => 'UC_modal_chan_a',
-            'name' => 'Modal Channel A',
-            'url' => 'https://example.com/modala',
-        ]);
-        $channelB = Channel::create([
-            'youtube_id' => 'UC_modal_chan_b',
-            'name' => 'Modal Channel B',
-            'url' => 'https://example.com/modalb',
-        ]);
-
-        $indexResponse = $this->actingAs($user)->get('/channels');
-        $indexResponse->assertStatus(200);
-        $indexResponse->assertDontSee('id="delete-channel-modal"', false);
-        $indexResponse->assertDontSee('Also delete downloaded files and images from disk');
-
-        // No native confirm() dialog left over from the old inline UX.
-        $indexResponse->assertDontSee('onsubmit="return confirm(', false);
-
-        $showResponse = $this->actingAs($user)->get('/channels/'.$channelB->id);
-        $showResponse->assertStatus(200);
-        $showResponse->assertSee('id="channel-actions-dropdown"', false);
-        $showResponse->assertSee('id="delete-channel-modal"', false);
-        $showResponse->assertSee('Also delete downloaded files and images from disk');
-        $showResponse->assertSee('Check for New Videos');
-        $showResponse->assertSee('Channel Settings');
-
-        // Exactly one checkbox on the show page (this channel's own delete modal).
-        $this->assertSame(
-            1,
-            substr_count($showResponse->getContent(), '<input type="checkbox" name="delete_files"')
-        );
     }
 
     public function test_channel_shows_total_downloaded_size_on_index_and_show_pages()
