@@ -82,6 +82,24 @@
             <div class="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800">
                 <h3 class="text-lg font-semibold text-white mb-4">About</h3>
                 <div class="text-gray-400 text-sm space-y-2">
+                    <p>
+                        Version: <span class="text-white font-semibold">v{{ config('app.version') }}</span>
+                        @if ($updateAvailable)
+                            <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-900/40 text-yellow-400 border border-yellow-800/60">
+                                Update available: v{{ $latestVersion }}
+                            </span>
+                        @endif
+                    </p>
+
+                    @if ($updateAvailable)
+                        <div class="bg-gray-950 border border-yellow-800/60 rounded p-3 space-y-2">
+                            <p class="text-yellow-400">A new version is available. To update:</p>
+                            <pre class="text-xs text-gray-300 bg-gray-900 p-2 rounded overflow-x-auto">docker compose pull
+docker compose up -d</pre>
+                            <a href="https://github.com/{{ config('services.github_repo') }}/tags" target="_blank" rel="noopener" class="text-blue-400 underline text-xs">View releases on GitHub ↗</a>
+                        </div>
+                    @endif
+
                     <p>Ytoberr is licensed under the <a href="https://opensource.org/licenses/MIT" class="text-blue-400 underline">MIT License</a>.</p>
                     <p>This is Free and Open Source Software (FOSS). It is free to use, modify, and distribute.</p>
                     <p class="italic text-gray-500">Provided "as is", without warranty of any kind, express or implied.</p>

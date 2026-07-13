@@ -8,17 +8,25 @@ use App\Models\User;
 use App\Models\Video;
 use App\Models\YtDlpCache;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class SettingsControllerTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Cache::flush();
+    }
+
     protected function tearDown(): void
     {
         $downloadsDir = Setting::getStoragePath();
-        if (file_exists($downloadsDir . '/Settings Test Channel')) {
-            exec('rm -rf ' . escapeshellarg($downloadsDir . '/Settings Test Channel'));
+        if (file_exists($downloadsDir.'/Settings Test Channel')) {
+            exec('rm -rf '.escapeshellarg($downloadsDir.'/Settings Test Channel'));
         }
 
         parent::tearDown();
@@ -29,7 +37,7 @@ class SettingsControllerTest extends TestCase
         $user = User::factory()->create();
 
         $ytDlp = base_path('bin/yt-dlp');
-        $expectedVersion = trim(shell_exec(escapeshellarg($ytDlp) . ' --version'));
+        $expectedVersion = trim(shell_exec(escapeshellarg($ytDlp).' --version'));
 
         YtDlpCache::create([
             'key' => 'cache-key-1',
@@ -87,6 +95,53 @@ class SettingsControllerTest extends TestCase
         );
     }
 
+    public function test_index_shows_update_notice_when_a_newer_version_is_available()
+    {
+        Http::fake([
+            'api.github.com/*' => Http::response([
+                ['name' => 'v999.0.0'],
+            ]),
+        ]);
+
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get('/settings');
+
+        $response->assertStatus(200);
+        $response->assertSee('Update available: v999.0.0');
+        $response->assertSee('docker compose pull');
+    }
+
+    public function test_index_does_not_show_update_notice_when_already_on_the_latest_version()
+    {
+        Http::fake([
+            'api.github.com/*' => Http::response([
+                ['name' => 'v'.config('app.version')],
+            ]),
+        ]);
+
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get('/settings');
+
+        $response->assertStatus(200);
+        $response->assertDontSee('Update available');
+    }
+
+    public function test_index_does_not_show_update_notice_when_github_is_unreachable()
+    {
+        Http::fake([
+            'api.github.com/*' => Http::failedConnection(),
+        ]);
+
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get('/settings');
+
+        $response->assertStatus(200);
+        $response->assertDontSee('Update available');
+    }
+
     public function test_update_storage_path_persists_the_setting()
     {
         $user = User::factory()->create();
@@ -140,8 +195,8 @@ class SettingsControllerTest extends TestCase
 
         $downloadsDir = Setting::getStoragePath();
         $existingRelativePath = 'Settings Test Channel/Season 2026/existing-video.mp4';
-        @mkdir($downloadsDir . '/Settings Test Channel/Season 2026', 0755, true);
-        file_put_contents($downloadsDir . '/' . $existingRelativePath, 'real file contents');
+        @mkdir($downloadsDir.'/Settings Test Channel/Season 2026', 0755, true);
+        file_put_contents($downloadsDir.'/'.$existingRelativePath, 'real file contents');
 
         $existingVideo = Video::create([
             'channel_id' => $channel->id,
@@ -183,8 +238,8 @@ class SettingsControllerTest extends TestCase
 
         $downloadsDir = Setting::getStoragePath();
         $existingRelativePath = 'Settings Test Channel/Season 2026/clean-existing-video.mp4';
-        @mkdir($downloadsDir . '/Settings Test Channel/Season 2026', 0755, true);
-        file_put_contents($downloadsDir . '/' . $existingRelativePath, 'real file contents');
+        @mkdir($downloadsDir.'/Settings Test Channel/Season 2026', 0755, true);
+        file_put_contents($downloadsDir.'/'.$existingRelativePath, 'real file contents');
 
         $existingVideo = Video::create([
             'channel_id' => $channel->id,

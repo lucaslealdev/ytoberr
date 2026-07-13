@@ -35,4 +35,6 @@ return [
         ],
     ],
 
+    'github_repo' => env('GITHUB_REPO', 'lucaslealdev/ytoberr'),
+
 ];
