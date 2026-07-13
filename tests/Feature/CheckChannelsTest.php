@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Channel;
 use App\Models\Setting;
+use App\Models\Video;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Sleep;
@@ -97,8 +99,69 @@ BASH;
 
         $exitCode = Artisan::call('app:check-channels');
 
-        $this->assertEquals(0, $exitCode, 'O comando app:check-channels falhou.');
+        $this->assertEquals(0, $exitCode, 'The app:check-channels command failed.');
         $this->assertStringContainsString('Checking channel: Placeholder Channel', Artisan::output());
+
+        unlink($mockYtDlp);
+    }
+
+    public function test_check_channels_uses_the_ytdlp_timestamp_field_for_the_exact_publish_time()
+    {
+        // 'upload_date' is day-only (YYYYMMDD); the 'timestamp' field is the Unix epoch and
+        // carries the real publish time, so it must win when both are present.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_timestamp_chan',
+            'name' => 'Timestamp Channel',
+            'url' => 'https://www.youtube.com/@timestamp_channel',
+            'download_quality' => '720p',
+        ]);
+
+        $publishedAt = Carbon::create(2026, 7, 13, 15, 30, 45, 'UTC');
+
+        $videos = [[
+            'id' => 'timestamp_vid',
+            'title' => 'Timestamp Video',
+            'upload_date' => $publishedAt->format('Ymd'),
+            'timestamp' => $publishedAt->timestamp,
+            'was_live' => false,
+            'media_type' => null,
+        ]];
+
+        $mockYtDlp = $this->mockYtDlpWithVideos('timestamp_channel', $videos);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+
+        $video = Video::where('youtube_id', 'timestamp_vid')->firstOrFail();
+        $this->assertEquals($publishedAt->toDateTimeString(), $video->published_at);
+
+        unlink($mockYtDlp);
+    }
+
+    public function test_check_channels_falls_back_to_midnight_when_ytdlp_omits_the_timestamp_field()
+    {
+        $channel = Channel::create([
+            'youtube_id' => 'UC_no_timestamp_chan',
+            'name' => 'No Timestamp Channel',
+            'url' => 'https://www.youtube.com/@no_timestamp_channel',
+            'download_quality' => '720p',
+        ]);
+
+        $videos = [[
+            'id' => 'no_timestamp_vid',
+            'title' => 'No Timestamp Video',
+            'upload_date' => '20260713',
+            'was_live' => false,
+            'media_type' => null,
+        ]];
+
+        $mockYtDlp = $this->mockYtDlpWithVideos('no_timestamp_channel', $videos);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+
+        $video = Video::where('youtube_id', 'no_timestamp_vid')->firstOrFail();
+        $this->assertEquals('2026-07-13 00:00:00', $video->published_at);
 
         unlink($mockYtDlp);
     }
