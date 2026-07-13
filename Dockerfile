@@ -3,7 +3,10 @@
 #######################################
 # Stage 1: PHP dependencies
 #######################################
-FROM composer:2 AS vendor
+# --platform=$BUILDPLATFORM: vendor/ is pure PHP/interpreted, not architecture-specific, so this
+# stage always builds once on the runner's native arch instead of once per target platform —
+# avoids running composer under QEMU emulation entirely during multi-arch builds.
+FROM --platform=$BUILDPLATFORM composer:2 AS vendor
 
 WORKDIR /app
 
@@ -22,7 +25,10 @@ RUN composer dump-autoload --no-dev --optimize --classmap-authoritative
 #######################################
 # Stage 2: Frontend assets
 #######################################
-FROM node:20-alpine AS frontend
+# --platform=$BUILDPLATFORM: public/build is compiled static JS/CSS, not architecture-specific.
+# Building natively here is also what avoided the ~4h hang we hit once with `npm ci` stalling
+# under QEMU arm64 emulation.
+FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend
 
 WORKDIR /app
 
