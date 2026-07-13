@@ -7,13 +7,14 @@ use App\Models\Setting;
 use App\Models\Video;
 use App\Models\Warning;
 use App\Models\YtDlpCache;
+use App\Services\BackupService;
 use App\Services\UpdateChecker;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
 class SettingsController extends Controller
 {
-    public function index(UpdateChecker $updateChecker)
+    public function index(UpdateChecker $updateChecker, BackupService $backups)
     {
         $ytDlp = base_path('bin/yt-dlp');
 
@@ -33,10 +34,11 @@ class SettingsController extends Controller
 
         $ytdlpDelaySeconds = Setting::ytdlpDelaySeconds();
         $warnings = Warning::with('video')->latest()->get();
+        $backupsList = $backups->list();
 
         return view('settings.index', compact(
             'ytDlpVersion', 'storagePath', 'cacheCount', 'queuedVideos', 'latestVersion', 'updateAvailable',
-            'ytdlpDelaySeconds', 'warnings'
+            'ytdlpDelaySeconds', 'warnings', 'backupsList'
         ));
     }
 
@@ -154,5 +156,56 @@ class SettingsController extends Controller
         $warning->delete();
 
         return back()->with('status', 'Warning dismissed.');
+    }
+
+    public function createBackup(BackupService $backups)
+    {
+        $filename = $backups->create();
+
+        return back()->with('status', "Backup created: {$filename}");
+    }
+
+    public function downloadBackup(string $filename, BackupService $backups)
+    {
+        $path = $backups->path($filename);
+
+        abort_unless($path, 404);
+
+        return response()->download($path);
+    }
+
+    public function deleteBackup(string $filename, BackupService $backups)
+    {
+        $backups->delete($filename);
+
+        return back()->with('status', 'Backup deleted.');
+    }
+
+    public function restoreBackup(string $filename, BackupService $backups)
+    {
+        $path = $backups->path($filename);
+
+        abort_unless($path, 404);
+
+        $backups->restoreFromPath($path);
+
+        return back()->with('status', "Database restored from backup: {$filename}");
+    }
+
+    public function restoreBackupUpload(Request $request, BackupService $backups)
+    {
+        $request->validate([
+            'backup_file' => ['required', 'file'],
+        ]);
+
+        $uploadedPath = $request->file('backup_file')->getRealPath();
+
+        if (file_get_contents($uploadedPath, false, null, 0, 16) !== "SQLite format 3\0") {
+            return back()->withErrors(['backup_file' => 'This does not look like a valid SQLite database file.']);
+        }
+
+        $backups->restoreFromPath($uploadedPath);
+
+        return back()->with('status', 'Database restored from the uploaded file.');
     }
 }
