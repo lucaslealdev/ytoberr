@@ -57,6 +57,9 @@ fi
 echo "[entrypoint] Running database migrations..."
 php artisan migrate --force
 
+echo "[entrypoint] Processing pending one-time operations..."
+php artisan operations:process --no-interaction
+
 echo "[entrypoint] Caching configuration, routes and views..."
 php artisan config:cache
 php artisan route:cache

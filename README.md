@@ -21,7 +21,8 @@ Self-hosted web dashboard for local archiving and automated monitoring of YouTub
 2. Install dependencies: `composer install`.
 3. Configure the `.env` file (based on `.env.example`).
 4. Run migrations: `php artisan migrate`.
-5. Download and set up the binary dependencies (`yt-dlp`, `ffmpeg`, `ffprobe`): `make setup-bins`.
+5. Process pending one-time data migrations: `php artisan operations:process`.
+6. Download and set up the binary dependencies (`yt-dlp`, `ffmpeg`, `ffprobe`): `make setup-bins`.
 
 ## 🖥️ Development Commands (Makefile)
 
