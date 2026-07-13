@@ -17,14 +17,27 @@ class SettingsControllerTest extends TestCase
 {
     use RefreshDatabase;
 
+    private string $mockYtDlp;
+
     protected function setUp(): void
     {
         parent::setUp();
         Cache::flush();
+
+        // The settings page shells out to yt-dlp for its version on every request;
+        // stub it out so the suite doesn't depend on the real binary being installed.
+        $this->mockYtDlp = storage_path('app/temp/mock_ytdlp_settings.sh');
+        file_put_contents($this->mockYtDlp, "#!/bin/bash\necho '2026.01.01'\n");
+        chmod($this->mockYtDlp, 0755);
+        config(['services.ytdlp_path' => $this->mockYtDlp]);
     }
 
     protected function tearDown(): void
     {
+        if (file_exists($this->mockYtDlp)) {
+            unlink($this->mockYtDlp);
+        }
+
         $downloadsDir = Setting::getStoragePath();
         if (file_exists($downloadsDir.'/Settings Test Channel')) {
             exec('rm -rf '.escapeshellarg($downloadsDir.'/Settings Test Channel'));
@@ -37,8 +50,7 @@ class SettingsControllerTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $ytDlp = base_path('bin/yt-dlp');
-        $expectedVersion = trim(shell_exec(escapeshellarg($ytDlp).' --version'));
+        $expectedVersion = '2026.01.01';
 
         YtDlpCache::create([
             'key' => 'cache-key-1',
