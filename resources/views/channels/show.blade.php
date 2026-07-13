@@ -249,7 +249,7 @@
                 }
             });
 
-            // --- Check for new videos (synchronous, runs from the dropdown) ---
+            // --- Check for new videos (queues a background job, runs from the dropdown) ---
             const btnCheckNewVideos = document.getElementById('btn-check-new-videos');
             const checkLabel = document.getElementById('check-new-videos-label');
             const checkIcon = document.getElementById('check-new-videos-icon');
@@ -259,7 +259,7 @@
                 closeMenu();
                 btnCheckNewVideos.disabled = true;
                 checkIcon.textContent = '⏳';
-                checkLabel.textContent = 'Checking...';
+                checkLabel.textContent = 'Queuing...';
                 checkResult.classList.add('hidden');
                 checkResult.classList.remove('text-red-400');
 
@@ -276,16 +276,12 @@
                         }
                         return response.json();
                     })
-                    .then(function (data) {
-                        if (data.added > 0) {
-                            checkResult.textContent = data.added + ' ' + (data.added === 1 ? 'video' : 'videos') + ' added to the download queue.';
-                        } else {
-                            checkResult.textContent = 'No new videos found.';
-                        }
+                    .then(function () {
+                        checkResult.textContent = 'Check queued. New videos will appear in the download queue shortly.';
                     })
                     .catch(function () {
                         checkResult.classList.add('text-red-400');
-                        checkResult.textContent = 'Error checking for new videos. Please try again.';
+                        checkResult.textContent = 'Error queuing the check. Please try again.';
                     })
                     .finally(function () {
                         btnCheckNewVideos.disabled = false;

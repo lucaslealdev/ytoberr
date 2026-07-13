@@ -183,18 +183,15 @@ class ChannelController extends Controller
     }
 
     /**
-     * Synchronously check this channel for new videos (dispatchSync runs the job's
-     * logic immediately, in-process, rather than queuing it) and report how many
-     * were added, so the request/response cycle can drive a "Checking..." button.
+     * Queue a background check for new videos on this channel. The check itself can take
+     * a long time (yt-dlp network calls plus the configured inter-request delay), so it
+     * must run on the queue worker rather than in the request/response cycle, which would
+     * otherwise tie up a web server worker until it finished.
      */
     public function checkNewVideos(Channel $channel)
     {
-        $countBefore = $channel->videos()->count();
+        CheckChannelForNewVideosJob::dispatch($channel);
 
-        CheckChannelForNewVideosJob::dispatchSync($channel);
-
-        $added = $channel->videos()->count() - $countBefore;
-
-        return response()->json(['added' => $added]);
+        return response()->json(['queued' => true]);
     }
 }
