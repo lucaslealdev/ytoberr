@@ -17,6 +17,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Application Version
+    |--------------------------------------------------------------------------
+    |
+    | Semantic version (see the VERSION file at the project root), shown in the
+    | dashboard footer. Bump the VERSION file and tag the matching release as
+    | vX.Y.Z to publish a Docker image tagged with the same version.
+    |
+    */
+
+    'version' => trim((string) @file_get_contents(base_path('VERSION'))) ?: 'dev',
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Environment
     |--------------------------------------------------------------------------
     |

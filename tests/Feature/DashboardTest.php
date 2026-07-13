@@ -61,6 +61,16 @@ class DashboardTest extends TestCase
         $this->assertTrue(strpos($content, 'Newer Video') < strpos($content, 'Older Video'));
     }
 
+    public function test_dashboard_footer_shows_the_application_version()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get('/');
+
+        $response->assertStatus(200);
+        $response->assertSee('Ytoberr v'.config('app.version'));
+    }
+
     public function test_dashboard_shows_empty_state_when_no_videos_downloaded()
     {
         $user = User::factory()->create();
