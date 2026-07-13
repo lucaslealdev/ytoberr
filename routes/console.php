@@ -8,10 +8,8 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-// Agenda o Polling de novos vídeos nos canais para rodar a cada 3 horas
+// Schedule polling for new videos across channels to run every 3 hours
 Schedule::command('app:check-channels')->everyThreeHours();
 
-// Agenda o processamento resiliente da fila de downloads a cada 2 minutos
+// Schedule resilient processing of the download queue every 2 minutes
 Schedule::command('videos:download')->everyTwoMinutes()->withoutOverlapping();
-
-

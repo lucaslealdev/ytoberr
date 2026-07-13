@@ -103,14 +103,14 @@ BASH;
         unlink($mockYtDlp);
     }
 
-    public function test_check_channels_command_skips_live_content_for_rbiana()
+    public function test_check_channels_command_skips_live_content()
     {
         $channel = Channel::create([
-            'youtube_id' => 'UCDfRoZgAMaGCnUyl5n2yECw',
-            'name' => 'Rbiana',
-            'url' => 'https://www.youtube.com/@rbiana',
+            'youtube_id' => 'UC_live_content_chan',
+            'name' => 'Live Content Channel',
+            'url' => 'https://www.youtube.com/@live_content_channel',
             'download_quality' => '720p',
-            'cutoff_date' => '2020-01-01', // Define uma data no passado para permitir identificar os vídeos normais no teste
+            'cutoff_date' => '2020-01-01', // Set a date in the past so the regular videos in the test can be identified
         ]);
 
         $liveIds = ['Jo_DcOL5WfE', 'uv7uihW1vro', 'Z4__qS94pgc', 'ZhuAh83Hv2M', 'Uw6jgKabtf4', 'a4vQsYGJWI4', '1HkgZzYnQ7E'];
@@ -124,18 +124,18 @@ BASH;
             $videos[] = ['id' => $id, 'title' => "Video {$id}", 'upload_date' => '20230601', 'was_live' => false, 'media_type' => null];
         }
 
-        $mockYtDlp = $this->mockYtDlpWithVideos('rbiana', $videos);
+        $mockYtDlp = $this->mockYtDlpWithVideos('live_content_channel', $videos);
         config(['services.ytdlp_path' => $mockYtDlp]);
 
-        // Executa o comando
+        // Run the command
         Artisan::call('app:check-channels');
 
         $output = Artisan::output();
 
-        // 1. Assert que a saída do console indica que vídeos que foram live foram ignorados
-        $this->assertStringContainsString('Originated from a live stream', $output, 'Nenhuma live gravada foi pulada ou reportada no output.');
+        // 1. Assert that the console output indicates videos that were live were skipped
+        $this->assertStringContainsString('Originated from a live stream', $output, 'No recorded live was skipped or reported in the output.');
 
-        // 2. Assert que vídeos de lives gravadas foram pulados e NÃO cadastrados no banco
+        // 2. Assert that recorded-live videos were skipped and NOT saved to the database
         foreach ($liveIds as $liveId) {
             $this->assertStringContainsString("Skipping video {$liveId}", $output);
             $this->assertDatabaseMissing('videos', [
@@ -143,7 +143,7 @@ BASH;
             ]);
         }
 
-        // 3. Assert que vídeos comuns do canal que não foram live FORAM cadastrados no banco
+        // 3. Assert that the channel's regular (non-live) videos WERE saved to the database
         foreach ($regularIds as $regularId) {
             $this->assertStringContainsString("New video found: {$regularId}", $output);
             $this->assertDatabaseHas('videos', ['youtube_id' => $regularId]);
@@ -172,9 +172,9 @@ BASH;
 
         $output = Artisan::output();
 
-        $this->assertStringContainsString('YouTube Short', $output, 'Nenhum Short foi pulado ou reportado no output.');
+        $this->assertStringContainsString('YouTube Short', $output, 'No Short was skipped or reported in the output.');
 
-        // Shorts devem ser pulados e não cadastrados no banco.
+        // Shorts must be skipped and not saved to the database.
         foreach ($shortIds as $shortId) {
             $this->assertStringContainsString("Skipping video {$shortId}: YouTube Short.", $output);
             $this->assertDatabaseMissing('videos', [
@@ -182,7 +182,7 @@ BASH;
             ]);
         }
 
-        // Vídeos regulares (não Shorts) do mesmo canal devem continuar sendo cadastrados normalmente.
+        // Regular (non-Shorts) videos from the same channel must still be saved normally.
         foreach ($regularIds as $regularId) {
             $this->assertStringContainsString("New video found: {$regularId}", $output);
         }
@@ -218,7 +218,7 @@ BASH;
             $this->assertDatabaseHas('videos', ['youtube_id' => $shortId]);
         }
 
-        $this->assertStringNotContainsString('YouTube Short', $output, 'Um Short foi pulado mesmo com download_shorts habilitado.');
+        $this->assertStringNotContainsString('YouTube Short', $output, 'A Short was skipped even with download_shorts enabled.');
 
         unlink($mockYtDlp);
     }

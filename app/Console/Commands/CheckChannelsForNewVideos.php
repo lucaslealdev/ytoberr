@@ -41,7 +41,7 @@ class CheckChannelsForNewVideos extends Command
 
             $this->info("Checking channel: {$channel->name}");
 
-            // 1. Pré-check de live_status (baseado no Pinchflat) usando o Wrapper
+            // 1. Live_status precheck (based on Pinchflat) using the Wrapper
             $metadata = $wrapper->getMetadata($channel->url, ['live_status'], ['--playlist-items 1']);
 
             if ($metadata) {
@@ -72,7 +72,7 @@ class CheckChannelsForNewVideos extends Command
             foreach ($output as $jsonLine) {
                 $metadata = json_decode($jsonLine, true);
                 if (! $metadata) {
-                    continue; // Pula avisos, erros ou linhas de log em formato de texto comum
+                    continue; // Skip warnings, errors, or plain text log lines
                 }
 
                 $videoId = $metadata['id'] ?? null;
@@ -91,7 +91,7 @@ class CheckChannelsForNewVideos extends Command
                     continue;
                 }
 
-                // Verifica se o vídeo foi publicado antes da data de corte (cutoff_date) do canal
+                // Check if the video was published before the channel's cut-off date (cutoff_date)
                 $publishedAt = isset($metadata['upload_date'])
                     ? Carbon::parse($metadata['upload_date'])
                     : now();
