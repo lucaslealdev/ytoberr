@@ -6,7 +6,6 @@ use App\Models\Setting;
 use App\Models\Video;
 use App\Services\PlexAssetService;
 use App\Support\PlexNaming;
-use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -123,13 +122,12 @@ class DownloadNextVideo extends Command
             // {downloads_dir}/{canal}/Season {YYYY}/{nome-do-arquivo}.{ext}
             $downloadsDir = Setting::getStoragePath();
             $safeChannelName = PlexNaming::sanitize($video->channel->name);
-            $publishedAt = Carbon::parse($video->published_at);
-            $year = $publishedAt->year;
-            $monthDay = $publishedAt->format('md');
+            [$year, $episode] = PlexNaming::seasonAndEpisode($video);
 
-            // Plex target filename: {channel_name} - s{year}e{monthday} - {title} [{id}].{ext}
-            $safeTitle = PlexNaming::sanitize($video->title);
-            $filename = "{$safeChannelName} - s{$year}e{$monthDay} - {$safeTitle} [{$video->youtube_id}]";
+            // Plex target filename: {channel_name} - s{year}e{episode} - {title} [{id}].{ext}
+            // (episode = upload month+day plus the video's upload_date_index, which keeps
+            // same-day siblings from the same channel from colliding into one Plex episode)
+            $filename = PlexNaming::filenameFor($video->channel, $video);
 
             $targetDir = $downloadsDir.'/'.$safeChannelName.'/Season '.$year;
             if (! file_exists($targetDir)) {
@@ -157,7 +155,7 @@ class DownloadNextVideo extends Command
             try {
                 $channelDir = $downloadsDir.'/'.$safeChannelName;
                 $plexAssets->syncChannelAssets($video->channel, $channelDir);
-                $plexAssets->writeVideoNfo($video, $targetDir.'/'.$filename.'.nfo', $year, $monthDay);
+                $plexAssets->writeVideoNfo($video, $targetDir.'/'.$filename.'.nfo', $year, $episode);
             } catch (\Throwable $e) {
                 Log::warning("Failed to write Plex metadata assets for video {$video->youtube_id}: ".$e->getMessage());
             }

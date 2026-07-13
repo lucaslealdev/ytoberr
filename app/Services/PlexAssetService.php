@@ -34,18 +34,21 @@ class PlexAssetService
 
     /**
      * Write a per-video .nfo file next to the downloaded video, using the
-     * Season {year} / Episode {monthDay} convention.
+     * Season {year} / Episode {episode} convention (see PlexNaming::seasonAndEpisode()).
      */
-    public function writeVideoNfo(Video $video, string $path, int $year, string $monthDay): void
+    public function writeVideoNfo(Video $video, string $path, int $year, string $episode): void
     {
         $xml = new \SimpleXMLElement('<episodedetails></episodedetails>');
         $xml->addChild('title', $video->title);
+        $xml->addChild('showtitle', $video->channel->name ?? '');
+        $uniqueId = $xml->addChild('uniqueid', $video->youtube_id);
+        $uniqueId->addAttribute('type', 'youtube');
+        $uniqueId->addAttribute('default', 'true');
         $xml->addChild('plot', $video->description ?? '');
         $xml->addChild('aired', Carbon::parse($video->published_at)->toDateString());
         $xml->addChild('season', (string) $year);
-        $xml->addChild('episode', $monthDay);
-        $uniqueId = $xml->addChild('uniqueid', $video->youtube_id);
-        $uniqueId->addAttribute('type', 'youtube');
+        $xml->addChild('episode', $episode);
+        $xml->addChild('genre', 'YouTube');
 
         file_put_contents($path, $xml->asXML());
     }
@@ -54,7 +57,11 @@ class PlexAssetService
     {
         $xml = new \SimpleXMLElement('<tvshow></tvshow>');
         $xml->addChild('title', $channel->name);
+        $uniqueId = $xml->addChild('uniqueid', $channel->youtube_id);
+        $uniqueId->addAttribute('type', 'youtube');
+        $uniqueId->addAttribute('default', 'true');
         $xml->addChild('plot', $channel->description ?? '');
+        $xml->addChild('genre', 'YouTube');
 
         file_put_contents($path, $xml->asXML());
     }
