@@ -130,6 +130,13 @@ stopwaitsecs=3600
 
 *(Ajuste o `user`, caminhos absolutos e logs conforme as permissões de ambiente do seu servidor).*
 
+## 🙏 Créditos
+
+Este projeto só existe por ter sido construído sobre o ombro de gigantes:
+
+- **[yt-dlp](https://github.com/yt-dlp/yt-dlp)** — o motor de download e extração de metadados por trás de todo o arquivamento.
+- **[Pinchflat](https://github.com/kieraneglin/pinchflat)** — referência direta de arquitetura e convenções (nomenclatura de arquivos compatível com Plex, geração de NFO, numeração de episódio por data/índice, entre outras).
+
 ## 📄 Licença
 
 Este projeto é open-sourced sob a [MIT license](https://opensource.org/licenses/MIT).
