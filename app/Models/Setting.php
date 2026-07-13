@@ -58,4 +58,37 @@ class Setting extends Model
     {
         return (int) self::get('ytdlp_delay_seconds', '5');
     }
+
+    /**
+     * Percentage of disk space used at $path (or storage_path() as a fallback, if $path
+     * doesn't exist yet — e.g. a custom storage path that hasn't been created).
+     */
+    public static function diskUsagePercent(string $path): float
+    {
+        if (! is_dir($path)) {
+            $path = storage_path();
+        }
+
+        $total = @disk_total_space($path) ?: 0;
+        $free = @disk_free_space($path) ?: 0;
+
+        return $total > 0 ? round((($total - $free) / $total) * 100, 1) : 0.0;
+    }
+
+    /**
+     * Tailwind background color class for a disk-usage bar: green up to 70%,
+     * orange above 70%, red above 90%.
+     */
+    public static function diskUsageColorClass(float $percent): string
+    {
+        if ($percent > 90) {
+            return 'bg-red-500';
+        }
+
+        if ($percent > 70) {
+            return 'bg-orange-500';
+        }
+
+        return 'bg-green-500';
+    }
 }
