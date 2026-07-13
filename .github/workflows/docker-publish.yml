@@ -21,6 +21,7 @@ jobs:
   build-and-smoke-test:
     name: Build & smoke test (native arch)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -81,6 +82,7 @@ jobs:
     needs: build-and-smoke-test
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
