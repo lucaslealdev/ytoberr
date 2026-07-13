@@ -144,7 +144,22 @@ class DownloadNextVideo extends Command
 
             $ext = pathinfo($videoFile, PATHINFO_EXTENSION);
             $targetFile = $targetDir.'/'.$filename.'.'.$ext;
-            copy($videoFile, $targetFile);
+
+            // @-suppressed: copy() emits an E_WARNING on failure that Laravel's error handler
+            // turns into an uncaught ErrorException, which would crash the command before our
+            // own (deliberate, more informative) handling below ever runs.
+            if (! @copy($videoFile, $targetFile)) {
+                // Without this check, a failed copy (disk full, permissions, ...) still left
+                // the video marked "completed" pointing at a missing/corrupt file, silently.
+                $message = "Failed to copy the downloaded file into place for \"{$video->title}\" ({$video->youtube_id}) — check disk space and permissions.";
+                $this->error($message);
+                Log::error($message);
+                Warning::log('download_copy_failed', $message, "Source: {$videoFile}\nDestination: {$targetFile}", $video->id);
+                $this->handleFailure($video, 'Failed to copy the downloaded file into the destination directory.');
+                $this->cleanup($tempDir);
+
+                return 1;
+            }
 
             // Build relative file path for database storage
             $relativePath = str_replace($downloadsDir.'/', '', $targetFile);
@@ -152,10 +167,16 @@ class DownloadNextVideo extends Command
             // Copy thumbnail to destination folder as {nome-do-arquivo}.jpg: Plex's "Local Media
             // Assets" agent only recognizes an episode thumbnail that exactly matches the video's
             // own filename (just with an image extension instead), not a "-thumb" suffixed name.
+            // Best-effort: a missing thumbnail shouldn't fail an otherwise-successful download.
             $hasThumb = file_exists($thumbFile);
             if ($hasThumb) {
-                copy($thumbFile, $targetDir.'/'.$filename.'.jpg');
-                $video->update(['thumbnail_path' => str_replace($downloadsDir.'/', '', $targetDir.'/'.$filename.'.jpg')]);
+                if (@copy($thumbFile, $targetDir.'/'.$filename.'.jpg')) {
+                    $video->update(['thumbnail_path' => str_replace($downloadsDir.'/', '', $targetDir.'/'.$filename.'.jpg')]);
+                } else {
+                    $message = "Failed to copy the thumbnail into place for \"{$video->title}\" ({$video->youtube_id}).";
+                    Log::warning($message);
+                    Warning::log('download_thumbnail_copy_failed', $message);
+                }
             }
 
             // Write Plex local assets (tvshow.nfo + channel art, per-video .nfo).
