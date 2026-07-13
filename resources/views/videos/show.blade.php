@@ -1,6 +1,7 @@
 @extends('layouts.app')
 
 @section('title', $video->title)
+@section('header', 'Video Details')
 
 @section('content')
     <!-- Breadcrumb -->
