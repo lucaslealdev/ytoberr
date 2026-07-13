@@ -30,6 +30,9 @@
         <main class="p-8">
             @yield('content')
         </main>
+        <footer class="p-4 text-center text-xs text-gray-600 border-t border-gray-800">
+            Ytoberr v{{ config('app.version') }}
+        </footer>
     </div>
     <script>
         const sidebar = document.getElementById('sidebar');

@@ -76,6 +76,21 @@ docker run -d --name ytoberr -p 8080:8080 \
   ytoberr
 ```
 
+## 🏷️ Versionamento
+
+O projeto segue [Versionamento Semântico](https://semver.org/lang/pt-BR/) (`MAJOR.MINOR.PATCH`). A versão atual fica no arquivo [`VERSION`](VERSION) na raiz do projeto e é exibida no rodapé do painel.
+
+Para lançar uma nova versão:
+
+1. Atualize o arquivo `VERSION` (ex.: `1.1.0`).
+2. Commit e crie uma tag git correspondente com o prefixo `v`:
+   ```bash
+   git commit -am "chore: bump version to 1.1.0"
+   git tag v1.1.0
+   git push origin main --tags
+   ```
+3. O push da tag `vX.Y.Z` dispara o [workflow do Docker](.github/workflows/docker-publish.yml), que publica `ghcr.io/lucaslealdev/ytoberr:1.1.0` (e atualiza `:latest`, já que a tag entra pela `main`).
+
 ## 📅 Agendamentos & Filas (Produção sem Docker)
 
 Se preferir rodar fora de Docker, configure manualmente os serviços abaixo para garantir que o Ytoberr monitore novos vídeos e processe os downloads em segundo plano de forma contínua (ao usar Docker, ambos já vêm configurados dentro do container):
