@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Channel extends Model
 {
-    protected $fillable = ['youtube_id', 'name', 'url', 'profile_image_path', 'download_quality', 'cutoff_date', 'description'];
+    protected $fillable = ['youtube_id', 'name', 'url', 'profile_image_path', 'download_quality', 'cutoff_date', 'description', 'download_shorts'];
 
     protected static function booted()
     {

@@ -89,13 +89,6 @@
                         </p>
                     </div>
                 </div>
-                <button
-                    type="button"
-                    class="delete-channel-btn relative z-10 text-red-500 hover:text-red-700 font-bold text-xl"
-                    aria-label="Delete channel"
-                    data-channel-id="{{ $channel->id }}"
-                    data-channel-name="{{ $channel->name }}"
-                >&times;</button>
             </div>
         @empty
             <div class="col-span-full p-8 bg-gray-900 rounded-lg text-center text-gray-400">
@@ -105,61 +98,4 @@
     </div>
 
     {{ $channels->links('components.pagination') }}
-
-    <!-- Delete Channel Confirmation Modal -->
-    <div id="delete-channel-modal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-70 flex items-center justify-center p-4">
-        <div class="bg-gray-900 border border-gray-800 rounded-lg max-w-md w-full p-6 shadow-2xl space-y-4">
-            <h3 class="text-xl font-bold text-white border-b border-gray-800 pb-2">Delete Channel</h3>
-
-            <p class="text-gray-300 text-sm">
-                Are you sure you want to remove <strong id="delete-channel-name" class="text-white"></strong>? This cannot be undone.
-            </p>
-
-            <form id="delete-channel-form" method="POST">
-                @csrf
-                @method('DELETE')
-                <label class="flex items-start gap-2 text-sm text-gray-300 bg-gray-950 border border-gray-800 rounded p-3 cursor-pointer select-none">
-                    <input type="checkbox" name="delete_files" value="1" class="mt-0.5 rounded border-gray-600 bg-gray-800">
-                    <span>
-                        Also delete downloaded files and images from disk
-                        <span class="block text-xs text-gray-500 mt-0.5">Permanently removes this channel's downloaded videos, thumbnails and metadata files, as well as its stored poster, banner and fanart images. This cannot be undone.</span>
-                    </span>
-                </label>
-
-                <div class="flex justify-end space-x-3 pt-4 mt-4 border-t border-gray-800">
-                    <button type="button" id="btn-cancel-delete-channel" class="bg-gray-800 text-gray-300 px-4 py-2 rounded hover:bg-gray-700 text-sm">Cancel</button>
-                    <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 text-sm">Delete Channel</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const modal = document.getElementById('delete-channel-modal');
-            const form = document.getElementById('delete-channel-form');
-            const nameEl = document.getElementById('delete-channel-name');
-            const checkbox = form.querySelector('input[name="delete_files"]');
-            const btnCancel = document.getElementById('btn-cancel-delete-channel');
-
-            document.querySelectorAll('.delete-channel-btn').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    form.action = '/channels/' + btn.dataset.channelId;
-                    nameEl.textContent = btn.dataset.channelName;
-                    checkbox.checked = false;
-                    modal.classList.remove('hidden');
-                });
-            });
-
-            btnCancel.addEventListener('click', function () {
-                modal.classList.add('hidden');
-            });
-
-            modal.addEventListener('click', function (event) {
-                if (event.target === modal) {
-                    modal.classList.add('hidden');
-                }
-            });
-        });
-    </script>
 @endsection

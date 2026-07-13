@@ -143,17 +143,6 @@ class ChannelController extends Controller
         }
     }
 
-    public function updateQuality(Request $request, Channel $channel)
-    {
-        $request->validate([
-            'quality' => 'required|in:480p,720p,1080p',
-        ]);
-
-        $channel->update(['download_quality' => $request->quality]);
-
-        return back()->with('status', 'Quality updated successfully!');
-    }
-
     public function show(Request $request, Channel $channel)
     {
         $videoSort = $request->query('video_sort', 'newest');
@@ -177,14 +166,35 @@ class ChannelController extends Controller
         return view('channels.show', compact('channel', 'videos', 'videoSort'));
     }
 
-    public function updateCutoff(Request $request, Channel $channel)
+    public function updateSettings(Request $request, Channel $channel)
     {
         $request->validate([
             'cutoff_date' => ['required', 'date'],
+            'quality' => ['required', 'in:480p,720p,1080p'],
         ]);
 
-        $channel->update(['cutoff_date' => $request->cutoff_date]);
+        $channel->update([
+            'cutoff_date' => $request->cutoff_date,
+            'download_quality' => $request->quality,
+            'download_shorts' => $request->boolean('download_shorts'),
+        ]);
 
-        return back()->with('status', 'Cut-off date updated successfully!');
+        return back()->with('status', 'Channel settings updated successfully!');
+    }
+
+    /**
+     * Synchronously check this channel for new videos (dispatchSync runs the job's
+     * logic immediately, in-process, rather than queuing it) and report how many
+     * were added, so the request/response cycle can drive a "Checking..." button.
+     */
+    public function checkNewVideos(Channel $channel)
+    {
+        $countBefore = $channel->videos()->count();
+
+        CheckChannelForNewVideosJob::dispatchSync($channel);
+
+        $added = $channel->videos()->count() - $countBefore;
+
+        return response()->json(['added' => $added]);
     }
 }

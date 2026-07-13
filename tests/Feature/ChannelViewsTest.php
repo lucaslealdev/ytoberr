@@ -62,17 +62,69 @@ class ChannelViewsTest extends TestCase
             'name' => 'Quality Channel 2',
             'url' => 'https://example.com/quality2',
             'download_quality' => '720p',
+            'cutoff_date' => '2026-01-01',
         ]);
 
-        $response = $this->actingAs($user)->patch('/channels/'.$channel->id.'/quality', [
+        $response = $this->actingAs($user)->patch('/channels/'.$channel->id.'/settings', [
             'quality' => '1080p',
+            'cutoff_date' => $channel->cutoff_date,
         ]);
 
         $response->assertRedirect();
         $this->assertEquals('1080p', $channel->fresh()->download_quality);
     }
 
-    public function test_delete_files_checkbox_lives_in_a_shared_confirmation_modal_not_on_each_card()
+    public function test_download_shorts_defaults_to_off_and_toggle_lives_in_channel_settings_modal()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_shorts_toggle_chan',
+            'name' => 'Shorts Toggle Channel',
+            'url' => 'https://example.com/shortstoggle',
+        ]);
+
+        $this->assertFalse((bool) $channel->fresh()->download_shorts);
+
+        $response = $this->actingAs($user)->get('/channels/'.$channel->id);
+        $response->assertStatus(200);
+        $response->assertSee('name="download_shorts"', false);
+        $response->assertSee('Download Shorts');
+
+        // Unchecked by default.
+        $this->assertDoesNotMatchRegularExpression(
+            '/name="download_shorts"[^>]*checked/',
+            $response->getContent()
+        );
+    }
+
+    public function test_download_shorts_preference_can_be_updated_from_the_channel_show_page()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_shorts_update_chan',
+            'name' => 'Shorts Update Channel',
+            'url' => 'https://example.com/shortsupdate',
+            'download_quality' => '720p',
+            'cutoff_date' => '2026-01-01',
+        ]);
+
+        $settingsPayload = ['quality' => '720p', 'cutoff_date' => '2026-01-01'];
+
+        $response = $this->actingAs($user)->patch('/channels/'.$channel->id.'/settings', $settingsPayload + [
+            'download_shorts' => '1',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertTrue((bool) $channel->fresh()->download_shorts);
+
+        // Unchecking sends no field at all; the controller must treat absence as false.
+        $response = $this->actingAs($user)->patch('/channels/'.$channel->id.'/settings', $settingsPayload);
+
+        $response->assertRedirect();
+        $this->assertFalse((bool) $channel->fresh()->download_shorts);
+    }
+
+    public function test_delete_channel_option_lives_in_kebab_menu_on_show_page_not_on_index_cards()
     {
         $user = User::factory()->create();
         Channel::create([
@@ -80,26 +132,33 @@ class ChannelViewsTest extends TestCase
             'name' => 'Modal Channel A',
             'url' => 'https://example.com/modala',
         ]);
-        Channel::create([
+        $channelB = Channel::create([
             'youtube_id' => 'UC_modal_chan_b',
             'name' => 'Modal Channel B',
             'url' => 'https://example.com/modalb',
         ]);
 
-        $response = $this->actingAs($user)->get('/channels');
-
-        $response->assertStatus(200);
-        $response->assertSee('id="delete-channel-modal"', false);
-        $response->assertSee('Also delete downloaded files and images from disk');
-
-        // Exactly one checkbox for the whole page (the shared modal's), not one per card.
-        $this->assertSame(
-            1,
-            substr_count($response->getContent(), '<input type="checkbox" name="delete_files"')
-        );
+        $indexResponse = $this->actingAs($user)->get('/channels');
+        $indexResponse->assertStatus(200);
+        $indexResponse->assertDontSee('id="delete-channel-modal"', false);
+        $indexResponse->assertDontSee('Also delete downloaded files and images from disk');
 
         // No native confirm() dialog left over from the old inline UX.
-        $response->assertDontSee('onsubmit="return confirm(', false);
+        $indexResponse->assertDontSee('onsubmit="return confirm(', false);
+
+        $showResponse = $this->actingAs($user)->get('/channels/'.$channelB->id);
+        $showResponse->assertStatus(200);
+        $showResponse->assertSee('id="channel-actions-dropdown"', false);
+        $showResponse->assertSee('id="delete-channel-modal"', false);
+        $showResponse->assertSee('Also delete downloaded files and images from disk');
+        $showResponse->assertSee('Check for New Videos');
+        $showResponse->assertSee('Channel Settings');
+
+        // Exactly one checkbox on the show page (this channel's own delete modal).
+        $this->assertSame(
+            1,
+            substr_count($showResponse->getContent(), '<input type="checkbox" name="delete_files"')
+        );
     }
 
     public function test_channel_shows_total_downloaded_size_on_index_and_show_pages()
@@ -260,7 +319,7 @@ class ChannelViewsTest extends TestCase
         $response->assertSee('The url field must be a valid URL.');
     }
 
-    public function test_updating_quality_shows_status_message_on_channel_show_page()
+    public function test_updating_channel_settings_shows_a_single_status_message_on_the_show_page()
     {
         $user = User::factory()->create();
         $channel = Channel::create([
@@ -273,31 +332,19 @@ class ChannelViewsTest extends TestCase
         $response = $this->actingAs($user)
             ->from('/channels/'.$channel->id)
             ->followingRedirects()
-            ->patch('/channels/'.$channel->id.'/quality', ['quality' => '1080p']);
+            ->patch('/channels/'.$channel->id.'/settings', [
+                'quality' => '1080p',
+                'cutoff_date' => '2026-01-01',
+                'download_shorts' => '1',
+            ]);
 
         $response->assertStatus(200);
-        $response->assertSee('Quality updated successfully!');
-        $this->assertEquals('1080p', $channel->fresh()->download_quality);
-    }
+        $response->assertSee('Channel settings updated successfully!');
 
-    public function test_updating_cutoff_shows_status_message_on_channel_show_page()
-    {
-        $user = User::factory()->create();
-        $channel = Channel::create([
-            'youtube_id' => 'UC_status_chan2',
-            'name' => 'Status Channel 2',
-            'url' => 'https://example.com/status2',
-            'download_quality' => '720p',
-        ]);
-
-        $response = $this->actingAs($user)
-            ->from('/channels/'.$channel->id)
-            ->followingRedirects()
-            ->patch('/channels/'.$channel->id.'/cutoff', ['cutoff_date' => '2026-01-01']);
-
-        $response->assertStatus(200);
-        $response->assertSee('Cut-off date updated successfully!');
-        $this->assertEquals('2026-01-01', $channel->fresh()->cutoff_date);
+        $channel->refresh();
+        $this->assertEquals('1080p', $channel->download_quality);
+        $this->assertEquals('2026-01-01', $channel->cutoff_date);
+        $this->assertTrue((bool) $channel->download_shorts);
     }
 
     public function test_deleting_channel_without_delete_files_flag_preserves_files_on_disk()
