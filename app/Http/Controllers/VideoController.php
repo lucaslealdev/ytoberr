@@ -62,4 +62,20 @@ class VideoController extends Controller
 
         return view('videos.show', compact('video', 'channelVideos', 'suggestedVideos'));
     }
+
+    /**
+     * Re-queue a failed video for download (e.g. from a "retry" button on its warning).
+     */
+    public function retry(Video $video)
+    {
+        $video->update([
+            'status' => 'pending',
+            'retries' => 0,
+            'prevent_download' => false,
+            'unavailable_reason' => null,
+            'last_error' => null,
+        ]);
+
+        return back()->with('status', "\"{$video->title}\" has been re-queued for download.");
+    }
 }

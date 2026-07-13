@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Channel;
 use App\Models\Setting;
+use App\Models\Warning;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -35,7 +36,9 @@ class ChannelService
         exec($command, $output, $resultCode);
 
         if ($resultCode !== 0) {
-            Log::error("Failed to fetch channel images for {$channel->url}. Code: $resultCode. Output: ".implode("\n", $output));
+            $message = "Failed to fetch channel images for {$channel->name} ({$channel->url}).";
+            Log::error($message.' Code: '.$resultCode.'. Output: '.implode("\n", $output));
+            Warning::log('channel_images_fetch_failed', $message, implode("\n", $output));
             $this->cleanup($tempDir);
 
             return;
@@ -44,7 +47,9 @@ class ChannelService
         // Find the generated JSON file
         $jsonFiles = glob($tempDir.'/*.info.json');
         if (empty($jsonFiles)) {
-            Log::error("Metadata JSON not created for {$channel->url}");
+            $message = "Metadata JSON not created for {$channel->name} ({$channel->url}).";
+            Log::error($message);
+            Warning::log('channel_images_fetch_failed', $message);
             $this->cleanup($tempDir);
 
             return;
@@ -55,7 +60,9 @@ class ChannelService
         $metadata = json_decode($jsonContent, true);
 
         if (! $metadata || ! isset($metadata['thumbnails'])) {
-            Log::error("Failed to parse channel metadata JSON for {$channel->url}");
+            $message = "Failed to parse channel metadata JSON for {$channel->name} ({$channel->url}).";
+            Log::error($message);
+            Warning::log('channel_images_fetch_failed', $message, $jsonContent);
             $this->cleanup($tempDir);
 
             return;

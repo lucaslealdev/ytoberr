@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Setting;
 use App\Models\Video;
+use App\Models\Warning;
 use App\Services\PlexAssetService;
 use App\Support\PlexNaming;
 use Illuminate\Console\Command;
@@ -262,7 +263,7 @@ class DownloadNextVideo extends Command
                     'created_at' => now(),
                 ]);
             }
-            $this->incrementConsecutiveFailures();
+            $this->incrementConsecutiveFailures($errorOutput);
 
             return;
         }
@@ -274,7 +275,9 @@ class DownloadNextVideo extends Command
                 'retries' => $retries,
                 'last_error' => 'Exceeded max download retries (3 times).',
             ]);
-            Log::error("Video {$video->youtube_id} permanently failed after 3 attempts.");
+            $message = "Video {$video->youtube_id} permanently failed after 3 attempts.";
+            Log::error($message);
+            Warning::log('download_failed_permanently', $message, "Video: {$video->title}\n\n{$errorOutput}", $video->id);
         } else {
             $video->update([
                 'status' => 'pending',
@@ -284,19 +287,21 @@ class DownloadNextVideo extends Command
             Log::warning("Video {$video->youtube_id} failed. Attempt {$retries}/3. Returned to queue.");
         }
 
-        $this->incrementConsecutiveFailures();
+        $this->incrementConsecutiveFailures($errorOutput);
     }
 
     /**
      * Increment consecutive failure settings and suspend queue if count >= 3
      */
-    private function incrementConsecutiveFailures(): void
+    private function incrementConsecutiveFailures(?string $context = null): void
     {
         $failures = (int) Setting::get('consecutive_failures', '0') + 1;
         Setting::set('consecutive_failures', (string) $failures);
 
         if ($failures >= 3) {
-            Log::critical('3 consecutive downloads failed! Suspending all pending downloads in queue due to suspected generalized failure.');
+            $message = '3 consecutive downloads failed! Suspending all pending downloads in queue due to suspected generalized failure.';
+            Log::critical($message);
+            Warning::log('queue_suspended', $message, $context);
 
             // Mark all remaining pending videos in the queue as failed
             Video::where('status', 'pending')

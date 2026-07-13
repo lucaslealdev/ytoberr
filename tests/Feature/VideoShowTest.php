@@ -17,8 +17,8 @@ class VideoShowTest extends TestCase
     {
         $downloadsDir = Setting::getStoragePath();
         foreach (['Main Channel', 'Other Channel'] as $dir) {
-            if (file_exists($downloadsDir . '/' . $dir)) {
-                exec('rm -rf ' . escapeshellarg($downloadsDir . '/' . $dir));
+            if (file_exists($downloadsDir.'/'.$dir)) {
+                exec('rm -rf '.escapeshellarg($downloadsDir.'/'.$dir));
             }
         }
 
@@ -41,13 +41,13 @@ class VideoShowTest extends TestCase
         ]);
 
         $downloadsDir = Setting::getStoragePath();
-        $mainDir = $downloadsDir . '/Main Channel/Season 2026';
-        $otherDir = $downloadsDir . '/Other Channel/Season 2026';
+        $mainDir = $downloadsDir.'/Main Channel/Season 2026';
+        $otherDir = $downloadsDir.'/Other Channel/Season 2026';
         mkdir($mainDir, 0755, true);
         mkdir($otherDir, 0755, true);
 
         $mainVideoRelPath = 'Main Channel/Season 2026/Main Channel - s2026e0710 - Target Video [target_vid].mp4';
-        file_put_contents($downloadsDir . '/' . $mainVideoRelPath, 'fake video bytes');
+        file_put_contents($downloadsDir.'/'.$mainVideoRelPath, 'fake video bytes');
 
         $video = Video::create([
             'channel_id' => $mainChannel->id,
@@ -84,7 +84,7 @@ class VideoShowTest extends TestCase
             'status' => 'completed',
         ]);
 
-        $response = $this->actingAs($user)->get('/videos/' . $video->id);
+        $response = $this->actingAs($user)->get('/videos/'.$video->id);
 
         $response->assertStatus(200);
         $response->assertSee('Target Video');
@@ -95,7 +95,7 @@ class VideoShowTest extends TestCase
         $response->assertDontSee('Pending Same Channel Video');
         $response->assertSee('Download Original File');
         $this->assertStringContainsString(
-            'href="' . $video->videoUrl() . '" download',
+            'href="'.$video->videoUrl().'" download',
             $response->getContent()
         );
     }
@@ -117,11 +117,44 @@ class VideoShowTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $response = $this->actingAs($user)->get('/videos/' . $video->id);
+        $response = $this->actingAs($user)->get('/videos/'.$video->id);
 
         $response->assertStatus(200);
         $response->assertSee('Video file not available.');
         $response->assertDontSee('<video', false);
         $response->assertDontSee('Download Original File');
+    }
+
+    public function test_retrying_a_failed_video_resets_it_back_to_pending()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_retry_chan',
+            'name' => 'Retry Channel',
+            'url' => 'https://example.com/retry',
+        ]);
+
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'retry_vid',
+            'title' => 'Retry Video',
+            'published_at' => now(),
+            'status' => 'failed',
+            'retries' => 3,
+            'prevent_download' => true,
+            'unavailable_reason' => 'Private video',
+            'last_error' => 'Permanently unavailable: Private video',
+        ]);
+
+        $response = $this->actingAs($user)->post('/videos/'.$video->id.'/retry');
+
+        $response->assertRedirect();
+
+        $video->refresh();
+        $this->assertSame('pending', $video->status);
+        $this->assertSame(0, $video->retries);
+        $this->assertFalse((bool) $video->prevent_download);
+        $this->assertNull($video->unavailable_reason);
+        $this->assertNull($video->last_error);
     }
 }

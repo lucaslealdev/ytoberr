@@ -27,6 +27,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/channels/{channel}', [ChannelController::class, 'destroy']);
     Route::get('/videos', [VideoController::class, 'index']);
     Route::get('/videos/{video}', [VideoController::class, 'show']);
+    Route::post('/videos/{video}/retry', [VideoController::class, 'retry'])->name('videos.retry');
     Route::get('/media/{path}', [MediaController::class, 'show'])->where('path', '.*')->name('media.show');
     Route::get('/settings', [SettingsController::class, 'index']);
     Route::post('/settings/profile', [SettingsController::class, 'updateProfile']);
@@ -36,4 +37,5 @@ Route::middleware('auth')->group(function () {
     Route::get('/settings/check-missing-videos', [SettingsController::class, 'checkMissingVideos']);
     Route::post('/settings/clean-missing-videos', [SettingsController::class, 'cleanMissingVideos']);
     Route::post('/settings/reset-cache', [SettingsController::class, 'resetCache']);
+    Route::delete('/settings/warnings/{warning}', [SettingsController::class, 'deleteWarning'])->name('settings.warnings.delete');
 });

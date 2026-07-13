@@ -6,6 +6,7 @@ use App\Models\Channel;
 use App\Models\Setting;
 use App\Models\User;
 use App\Models\Video;
+use App\Models\Warning;
 use App\Models\YtDlpCache;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -140,6 +141,116 @@ class SettingsControllerTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertDontSee('Update available');
+    }
+
+    public function test_index_lists_warnings_with_their_details()
+    {
+        $user = User::factory()->create();
+
+        Warning::log('download_failed_permanently', 'Video X permanently failed after 3 attempts.', 'raw yt-dlp output here');
+
+        $response = $this->actingAs($user)->get('/settings');
+
+        $response->assertStatus(200);
+        $response->assertSee('Video X permanently failed after 3 attempts.');
+        $response->assertSee('download_failed_permanently');
+        $response->assertSee('raw yt-dlp output here');
+    }
+
+    public function test_index_shows_no_warnings_message_when_there_are_none()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get('/settings');
+
+        $response->assertStatus(200);
+        $response->assertSee('No warnings. Everything looks healthy.');
+    }
+
+    public function test_sidebar_shows_a_red_badge_with_the_warnings_count_next_to_settings()
+    {
+        $user = User::factory()->create();
+        Warning::log('queue_suspended', 'Suspending all pending downloads.');
+        Warning::log('channel_check_failed', 'Failed to check channel: Some Channel');
+
+        $response = $this->actingAs($user)->get('/');
+
+        $response->assertStatus(200);
+        $response->assertSee('id="sidebar"', false);
+        $this->assertMatchesRegularExpression(
+            '/bg-red-600[^>]*>\s*2\s*</s',
+            $response->getContent()
+        );
+    }
+
+    public function test_sidebar_does_not_show_a_warnings_badge_when_there_are_no_warnings()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get('/');
+
+        $response->assertStatus(200);
+        $response->assertDontSee('bg-red-600', false);
+    }
+
+    public function test_can_dismiss_a_warning()
+    {
+        $user = User::factory()->create();
+        $warning = Warning::log('queue_suspended', 'Suspending all pending downloads.');
+
+        $response = $this->actingAs($user)->delete("/settings/warnings/{$warning->id}");
+
+        $response->assertRedirect();
+        $this->assertDatabaseMissing('warnings', ['id' => $warning->id]);
+    }
+
+    public function test_dismissing_a_warning_does_not_prevent_the_same_problem_from_being_logged_again()
+    {
+        $user = User::factory()->create();
+        $first = Warning::log('queue_suspended', 'Suspending all pending downloads.');
+
+        $this->actingAs($user)->delete("/settings/warnings/{$first->id}");
+        $this->assertDatabaseMissing('warnings', ['id' => $first->id]);
+
+        $second = Warning::log('queue_suspended', 'Suspending all pending downloads.');
+
+        $this->assertDatabaseHas('warnings', ['id' => $second->id]);
+        $this->assertSame(1, Warning::count());
+    }
+
+    public function test_warning_linked_to_a_video_shows_a_retry_download_button()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_warning_retry_chan',
+            'name' => 'Warning Retry Channel',
+            'url' => 'https://example.com/warningretry',
+        ]);
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'warning_retry_vid',
+            'title' => 'Warning Retry Video',
+            'published_at' => now(),
+            'status' => 'failed',
+        ]);
+        Warning::log('download_failed_permanently', 'Video permanently failed.', null, $video->id);
+
+        $response = $this->actingAs($user)->get('/settings');
+
+        $response->assertStatus(200);
+        $response->assertSee('Retry Download');
+        $response->assertSee('action="'.route('videos.retry', $video).'"', false);
+    }
+
+    public function test_warning_without_a_video_does_not_show_a_retry_download_button()
+    {
+        $user = User::factory()->create();
+        Warning::log('queue_suspended', 'Suspending all pending downloads.');
+
+        $response = $this->actingAs($user)->get('/settings');
+
+        $response->assertStatus(200);
+        $response->assertDontSee('Retry Download');
     }
 
     public function test_update_ytdlp_delay_persists_the_setting()

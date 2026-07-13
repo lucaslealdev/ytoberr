@@ -133,6 +133,52 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
         </div>
     </div>
 
+    <!-- Warnings Section -->
+    <div class="mt-8 bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800">
+        <h3 class="text-lg font-semibold text-white mb-4">
+            Warnings
+            @if ($warnings->isNotEmpty())
+                <span class="ml-2 bg-red-600 text-white text-xs rounded-full px-2 py-0.5 align-middle">{{ $warnings->count() }}</span>
+            @endif
+        </h3>
+
+        @if ($warnings->isEmpty())
+            <p class="text-gray-500 text-sm italic">No warnings. Everything looks healthy.</p>
+        @else
+            <div class="space-y-3">
+                @foreach ($warnings as $warning)
+                    <div class="bg-gray-950 border border-red-900/40 rounded p-3">
+                        <div class="flex items-start justify-between gap-4">
+                            <div class="min-w-0">
+                                <p class="text-red-400 font-semibold text-sm">{{ $warning->message }}</p>
+                                <p class="text-gray-500 text-xs mt-0.5">{{ $warning->source }} &middot; {{ $warning->created_at->diffForHumans() }}</p>
+                            </div>
+                            <div class="flex items-center gap-3 flex-shrink-0">
+                                @if ($warning->video)
+                                    <form action="{{ route('videos.retry', $warning->video) }}" method="POST">
+                                        @csrf
+                                        <button type="submit" class="text-green-400 hover:text-green-300 text-xs">Retry Download</button>
+                                    </form>
+                                @endif
+                                <form action="{{ route('settings.warnings.delete', $warning) }}" method="POST">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="text-gray-400 hover:text-white text-xs">Dismiss</button>
+                                </form>
+                            </div>
+                        </div>
+                        @if ($warning->details)
+                            <details class="mt-2">
+                                <summary class="cursor-pointer text-blue-400 text-xs">View details</summary>
+                                <pre class="mt-2 text-xs text-gray-300 whitespace-pre-wrap bg-gray-900 p-3 rounded max-h-60 overflow-y-auto">{{ $warning->details }}</pre>
+                            </details>
+                        @endif
+                    </div>
+                @endforeach
+            </div>
+        @endif
+    </div>
+
     <!-- Download Queue Section -->
     <div class="mt-8 bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800">
         <h3 class="text-lg font-semibold text-white mb-4">Download Queue</h3>
