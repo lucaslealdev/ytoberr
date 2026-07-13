@@ -2,28 +2,37 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\UpdateToolsJob;
 use App\Models\Setting;
+use App\Models\Video;
+use App\Models\YtDlpCache;
+use App\Services\UpdateChecker;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
 class SettingsController extends Controller
 {
-    public function index()
+    public function index(UpdateChecker $updateChecker)
     {
         $ytDlp = base_path('bin/yt-dlp');
 
-        $ytDlpVersion = shell_exec(escapeshellarg($ytDlp) . ' --version');
+        $ytDlpVersion = shell_exec(escapeshellarg($ytDlp).' --version');
 
         $storagePath = Setting::getStoragePath();
-        $cacheCount = \App\Models\YtDlpCache::count();
+        $cacheCount = YtDlpCache::count();
 
         // Videos currently in queue (status is not completed)
-        $queuedVideos = \App\Models\Video::with('channel')
+        $queuedVideos = Video::with('channel')
             ->where('status', '!=', 'completed')
             ->orderBy('created_at', 'desc')
             ->get();
 
-        return view('settings.index', compact('ytDlpVersion', 'storagePath', 'cacheCount', 'queuedVideos'));
+        $latestVersion = $updateChecker->latestVersion();
+        $updateAvailable = $updateChecker->isNewer(config('app.version'), $latestVersion);
+
+        return view('settings.index', compact(
+            'ytDlpVersion', 'storagePath', 'cacheCount', 'queuedVideos', 'latestVersion', 'updateAvailable'
+        ));
     }
 
     public function updateProfile(Request $request)
@@ -32,7 +41,7 @@ class SettingsController extends Controller
 
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email,' . $user->id],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email,'.$user->id],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
         ]);
 
@@ -50,7 +59,8 @@ class SettingsController extends Controller
 
     public function updateTools()
     {
-        \App\Jobs\UpdateToolsJob::dispatch();
+        UpdateToolsJob::dispatch();
+
         return back()->with('status', 'Update process started in the background!');
     }
 
@@ -68,7 +78,7 @@ class SettingsController extends Controller
     public function checkMissingVideos()
     {
         $missingVideos = [];
-        $videos = \App\Models\Video::with('channel')->get();
+        $videos = Video::with('channel')->get();
         $downloadsDir = Setting::getStoragePath();
 
         foreach ($videos as $video) {
@@ -77,10 +87,10 @@ class SettingsController extends Controller
             }
 
             // O file_path deve ser relativo ao downloadsDir
-            $fullPath = $downloadsDir . '/' . ltrim($video->file_path, '/');
+            $fullPath = $downloadsDir.'/'.ltrim($video->file_path, '/');
             $exists = file_exists($fullPath);
 
-            if (!$exists) {
+            if (! $exists) {
                 $missingVideos[] = [
                     'id' => $video->id,
                     'title' => $video->title,
@@ -95,7 +105,7 @@ class SettingsController extends Controller
 
     public function cleanMissingVideos(Request $request)
     {
-        $videos = \App\Models\Video::all();
+        $videos = Video::all();
         $downloadsDir = Setting::getStoragePath();
         $deletedCount = 0;
 
@@ -104,10 +114,10 @@ class SettingsController extends Controller
                 continue;
             }
 
-            $fullPath = $downloadsDir . '/' . ltrim($video->file_path, '/');
+            $fullPath = $downloadsDir.'/'.ltrim($video->file_path, '/');
             $exists = file_exists($fullPath);
 
-            if (!$exists) {
+            if (! $exists) {
                 $video->delete();
                 $deletedCount++;
             }
@@ -118,7 +128,8 @@ class SettingsController extends Controller
 
     public function resetCache()
     {
-        \App\Models\YtDlpCache::truncate();
+        YtDlpCache::truncate();
+
         return back()->with('status', 'yt-dlp metadata cache cleared successfully!');
     }
 }
