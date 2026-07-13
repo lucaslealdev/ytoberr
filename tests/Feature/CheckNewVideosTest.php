@@ -119,4 +119,22 @@ BASH;
 
         unlink($mockYtDlp);
     }
+
+    public function test_check_new_videos_job_has_a_timeout_generous_enough_for_the_configurable_ytdlp_delay()
+    {
+        // Regression guard: app:check-channels sleeps up to ytdlp_delay_seconds' max allowed
+        // value (120s, see Settings validation) between its two yt-dlp calls, plus real
+        // network time for each call. The queue worker's default 60s timeout would kill the
+        // job outright before that finishes, silently dropping the check (see production
+        // incident: the job landed in failed_jobs with a TimeoutExceededException).
+        $channel = Channel::create([
+            'youtube_id' => 'UC_timeout_chan',
+            'name' => 'Timeout Channel',
+            'url' => 'https://example.com/timeout',
+        ]);
+
+        $job = new CheckChannelForNewVideosJob($channel);
+
+        $this->assertGreaterThanOrEqual(300, $job->timeout);
+    }
 }
