@@ -70,6 +70,13 @@ class DownloadNextVideo extends Command
             '--output '.escapeshellarg($outputTemplate),
         ];
 
+        // Sleep between requests/downloads to avoid triggering YouTube's IP rate-limiting.
+        $delay = Setting::ytdlpDelaySeconds();
+        if ($delay > 0) {
+            $arguments[] = '--sleep-requests '.$delay;
+            $arguments[] = '--sleep-interval '.$delay;
+        }
+
         // Cookies support if present
         $cookiePath = storage_path('app/cookies.txt');
         if (file_exists($cookiePath)) {

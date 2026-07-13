@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Jobs\CheckChannelForNewVideosJob;
 use App\Models\Channel;
+use App\Models\Setting;
 use App\Models\User;
 use App\Models\Video;
 use App\Services\ChannelService;
@@ -26,6 +27,11 @@ class RealChannelIntegrationTest extends TestCase
         config(['database.connections.sqlite.database' => ':memory:']);
 
         $this->artisan('migrate');
+
+        // These tests hit the real yt-dlp binary against real YouTube URLs; the production
+        // safety delay between requests would only slow the suite down without adding value.
+        Setting::set('ytdlp_delay_seconds', '0');
+
         $user = User::factory()->create();
         $this->actingAs($user);
     }

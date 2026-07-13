@@ -3,12 +3,14 @@
 namespace App\Console\Commands;
 
 use App\Models\Channel;
+use App\Models\Setting;
 use App\Models\Video;
 use App\Services\YtDlpWrapper;
 use Carbon\Carbon;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Support\Sleep;
 
 #[Signature('app:check-channels {--channel= : Only check the given channel ID instead of every channel}')]
 #[Description('Check for new videos in configured channels and queue downloads')]
@@ -24,7 +26,18 @@ class CheckChannelsForNewVideos extends Command
             ? Channel::where('id', $this->option('channel'))->get()
             : Channel::all();
 
+        $delay = Setting::ytdlpDelaySeconds();
+        $isFirstChannel = true;
+
         foreach ($channels as $channel) {
+            // --sleep-requests only throttles requests *within* a single yt-dlp process; with
+            // many channels, this loop fires a fresh yt-dlp process per channel back-to-back,
+            // so the actual gap between channels has to be enforced here instead.
+            if (! $isFirstChannel && $delay > 0) {
+                Sleep::for($delay)->seconds();
+            }
+            $isFirstChannel = false;
+
             $this->info("Checking channel: {$channel->name}");
 
             // 1. Pré-check de live_status (baseado no Pinchflat) usando o Wrapper
@@ -40,11 +53,18 @@ class CheckChannelsForNewVideos extends Command
                 }
             }
 
+            // Same reasoning as the between-channels sleep above: this is a second, separate
+            // yt-dlp process for the same channel, so it needs its own gap from the first.
+            if ($delay > 0) {
+                Sleep::for($delay)->seconds();
+            }
+
             // 2. Fetch new videos (IDs)
             $output = [];
             $resultCode = 0;
             // Use --ignore-errors and -j to get metadata of the last 10 videos including 'was_live'
-            $command = escapeshellarg($ytDlp).' --ignore-errors -j --playlist-items :10 '.escapeshellarg($channel->url).' 2>&1';
+            $sleepArgs = $delay > 0 ? "--sleep-requests {$delay} " : '';
+            $command = escapeshellarg($ytDlp).' --ignore-errors -j '.$sleepArgs.'--playlist-items :10 '.escapeshellarg($channel->url).' 2>&1';
             exec($command, $output, $resultCode);
 
             $processedCount = 0;

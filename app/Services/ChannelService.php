@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Channel;
+use App\Models\Setting;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -23,10 +24,13 @@ class ChannelService
 
         $ytDlp = config('services.ytdlp_path', base_path('bin/yt-dlp'));
 
+        $delay = Setting::ytdlpDelaySeconds();
+        $sleepArgs = $delay > 0 ? "--sleep-requests {$delay} " : '';
+
         // 1. Run yt-dlp: --skip-download is CRUCIAL to not download videos
         // --playlist-items 0 gets channel level details
         // --write-info-json saves metadata to a .info.json file
-        $command = "{$ytDlp} --skip-download --no-playlist --playlist-items 0 --write-all-thumbnails --convert-thumbnails jpg --write-info-json --output ".escapeshellarg($outputPath).' '.escapeshellarg($channel->url).' 2>&1';
+        $command = "{$ytDlp} --skip-download --no-playlist --playlist-items 0 --write-all-thumbnails --convert-thumbnails jpg --write-info-json {$sleepArgs}--output ".escapeshellarg($outputPath).' '.escapeshellarg($channel->url).' 2>&1';
 
         exec($command, $output, $resultCode);
 

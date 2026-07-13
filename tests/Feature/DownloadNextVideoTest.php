@@ -268,4 +268,131 @@ exit 1
 
         unlink($mockYtDlp);
     }
+
+    public function test_downloader_passes_the_configured_sleep_delay_to_ytdlp()
+    {
+        Setting::set('ytdlp_delay_seconds', '7');
+
+        $channel = Channel::create([
+            'youtube_id' => 'UC_test_chan',
+            'name' => 'Space Channel',
+            'url' => 'https://example.com/space',
+        ]);
+
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'delay_vid',
+            'title' => 'Delay Video',
+            'published_at' => now(),
+            'status' => 'pending',
+        ]);
+
+        $capturedArgsPath = storage_path('app/temp/captured_ytdlp_args_delay.txt');
+        if (file_exists($capturedArgsPath)) {
+            unlink($capturedArgsPath);
+        }
+
+        // Quoted heredoc: $@/$arg/$out_dir must reach bash untouched, so the captured-args
+        // path is substituted afterwards rather than interpolated by PHP.
+        $scriptBody = <<<'BASH'
+#!/bin/bash
+printf '%s\n' "$@" > "__CAPTURED_ARGS_PATH__"
+for arg in "$@"; do
+    if [[ $arg == *video.* ]]; then
+        out_dir=$(dirname "$arg")
+        mkdir -p "$out_dir"
+        echo "dummy video" > "$out_dir/video.mp4"
+        echo "dummy thumb" > "$out_dir/video.jpg"
+        echo "{}" > "$out_dir/video.info.json"
+        exit 0
+    fi
+done
+exit 1
+BASH;
+        $scriptBody = str_replace('__CAPTURED_ARGS_PATH__', $capturedArgsPath, $scriptBody);
+
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_delay.sh');
+        file_put_contents($mockYtDlp, $scriptBody);
+        chmod($mockYtDlp, 0755);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('videos:download');
+
+        $video->refresh();
+        $this->assertEquals('completed', $video->status);
+
+        $this->assertFileExists($capturedArgsPath);
+        $capturedArgs = explode("\n", trim(file_get_contents($capturedArgsPath)));
+
+        $sleepRequestsIndex = array_search('--sleep-requests', $capturedArgs);
+        $this->assertNotFalse($sleepRequestsIndex, 'yt-dlp was not called with --sleep-requests.');
+        $this->assertSame('7', $capturedArgs[$sleepRequestsIndex + 1]);
+
+        $sleepIntervalIndex = array_search('--sleep-interval', $capturedArgs);
+        $this->assertNotFalse($sleepIntervalIndex, 'yt-dlp was not called with --sleep-interval.');
+        $this->assertSame('7', $capturedArgs[$sleepIntervalIndex + 1]);
+
+        unlink($mockYtDlp);
+        unlink($capturedArgsPath);
+    }
+
+    public function test_downloader_omits_sleep_flags_when_delay_is_set_to_zero()
+    {
+        Setting::set('ytdlp_delay_seconds', '0');
+
+        $channel = Channel::create([
+            'youtube_id' => 'UC_test_chan',
+            'name' => 'Space Channel',
+            'url' => 'https://example.com/space',
+        ]);
+
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'no_delay_vid',
+            'title' => 'No Delay Video',
+            'published_at' => now(),
+            'status' => 'pending',
+        ]);
+
+        $capturedArgsPath = storage_path('app/temp/captured_ytdlp_args_no_delay.txt');
+        if (file_exists($capturedArgsPath)) {
+            unlink($capturedArgsPath);
+        }
+
+        $scriptBody = <<<'BASH'
+#!/bin/bash
+printf '%s\n' "$@" > "__CAPTURED_ARGS_PATH__"
+for arg in "$@"; do
+    if [[ $arg == *video.* ]]; then
+        out_dir=$(dirname "$arg")
+        mkdir -p "$out_dir"
+        echo "dummy video" > "$out_dir/video.mp4"
+        echo "dummy thumb" > "$out_dir/video.jpg"
+        echo "{}" > "$out_dir/video.info.json"
+        exit 0
+    fi
+done
+exit 1
+BASH;
+        $scriptBody = str_replace('__CAPTURED_ARGS_PATH__', $capturedArgsPath, $scriptBody);
+
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_no_delay.sh');
+        file_put_contents($mockYtDlp, $scriptBody);
+        chmod($mockYtDlp, 0755);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('videos:download');
+
+        $video->refresh();
+        $this->assertEquals('completed', $video->status);
+
+        $this->assertFileExists($capturedArgsPath);
+        $capturedArgs = file_get_contents($capturedArgsPath);
+
+        $this->assertStringNotContainsString('--sleep-requests', $capturedArgs);
+        $this->assertStringNotContainsString('--sleep-interval', $capturedArgs);
+
+        unlink($mockYtDlp);
+        unlink($capturedArgsPath);
+    }
 }

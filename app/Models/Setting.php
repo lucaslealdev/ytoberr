@@ -14,6 +14,7 @@ class Setting extends Model
     public static function get(string $key, $default = null): ?string
     {
         $setting = self::where('key', $key)->first();
+
         return $setting ? $setting->value : $default;
     }
 
@@ -47,5 +48,14 @@ class Setting extends Model
         }
 
         return storage_path('app/public/downloads');
+    }
+
+    /**
+     * Seconds to sleep between yt-dlp requests/downloads. Defaults to a conservative value
+     * to avoid triggering YouTube's IP rate-limiting/bot-check on frequent polling.
+     */
+    public static function ytdlpDelaySeconds(): int
+    {
+        return (int) self::get('ytdlp_delay_seconds', '5');
     }
 }

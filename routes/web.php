@@ -1,12 +1,12 @@
 <?php
 
-use App\Http\Controllers\Auth\SetupController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\SetupController;
 use App\Http\Controllers\ChannelController;
-use App\Http\Controllers\VideoController;
-use App\Http\Controllers\SettingsController;
-use App\Http\Controllers\MediaController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\MediaController;
+use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\VideoController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/setup', [SetupController::class, 'show']);
@@ -32,6 +32,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/settings/profile', [SettingsController::class, 'updateProfile']);
     Route::post('/settings/update-tools', [SettingsController::class, 'updateTools']);
     Route::post('/settings/storage-path', [SettingsController::class, 'updateStoragePath']);
+    Route::post('/settings/ytdlp-delay', [SettingsController::class, 'updateYtdlpDelay']);
     Route::get('/settings/check-missing-videos', [SettingsController::class, 'checkMissingVideos']);
     Route::post('/settings/clean-missing-videos', [SettingsController::class, 'cleanMissingVideos']);
     Route::post('/settings/reset-cache', [SettingsController::class, 'resetCache']);
