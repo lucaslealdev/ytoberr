@@ -17,25 +17,90 @@ class CheckChannelsTest extends TestCase
     {
         parent::setUp();
 
-        // Most of these tests hit the real yt-dlp binary against real YouTube channels;
-        // the production safety delay between requests would only slow the suite down
+        // yt-dlp is always mocked in this test class (see mockYtDlpWithVideos()); the
+        // production safety delay between requests would only slow the suite down
         // without adding value.
         Setting::set('ytdlp_delay_seconds', '0');
+    }
+
+    /**
+     * Create a fake yt-dlp executable that answers both calls the check-channels command
+     * makes: the live_status precheck (YtDlpWrapper's --print-to-file selective mode) and
+     * the video listing (-j, one JSON object per line on stdout).
+     *
+     * @param  array<int, array<string, mixed>>  $videos
+     */
+    private function mockYtDlpWithVideos(string $name, array $videos): string
+    {
+        $mockYtDlp = storage_path("app/temp/mock_ytdlp_{$name}.sh");
+
+        $jsonLines = collect($videos)
+            ->map(fn (array $video) => json_encode($video))
+            ->implode("\n");
+
+        $script = <<<'BASH'
+#!/bin/bash
+if [[ "$*" == *"--print-to-file"* ]]; then
+    args=("$@")
+    for i in "${!args[@]}"; do
+        if [[ "${args[$i]}" == "--print-to-file" ]]; then
+            outfile="${args[$((i+2))]}"
+            echo '{"live_status": null}' > "$outfile"
+            exit 0
+        fi
+    done
+fi
+
+cat <<'VIDEOS'
+__VIDEOS__
+VIDEOS
+exit 0
+BASH;
+
+        file_put_contents($mockYtDlp, str_replace('__VIDEOS__', $jsonLines, $script));
+        chmod($mockYtDlp, 0755);
+
+        return $mockYtDlp;
+    }
+
+    /**
+     * @param  array<int, string>  $shortIds
+     * @param  array<int, string>  $regularIds
+     * @return array<int, array<string, mixed>>
+     */
+    private function shortsChannelVideos(array $shortIds, array $regularIds): array
+    {
+        $videos = [];
+
+        foreach ($shortIds as $id) {
+            $videos[] = ['id' => $id, 'title' => "Short {$id}", 'upload_date' => '20230601', 'was_live' => false, 'media_type' => 'short'];
+        }
+
+        foreach ($regularIds as $id) {
+            $videos[] = ['id' => $id, 'title' => "Video {$id}", 'upload_date' => '20230601', 'was_live' => false, 'media_type' => null];
+        }
+
+        return $videos;
     }
 
     public function test_check_channels_command_runs_successfully()
     {
         $channel = Channel::create([
-            'youtube_id' => 'UCexaxaj4QzEirjgmPCBdhSg',
-            'name' => 'Jiraiya',
-            'url' => 'https://www.youtube.com/@jiranha',
+            'youtube_id' => 'UC_placeholder_channel',
+            'name' => 'Placeholder Channel',
+            'url' => 'https://www.youtube.com/@placeholder_channel',
             'download_quality' => '720p',
         ]);
+
+        $mockYtDlp = $this->mockYtDlpWithVideos('runs_successfully', []);
+        config(['services.ytdlp_path' => $mockYtDlp]);
 
         $exitCode = Artisan::call('app:check-channels');
 
         $this->assertEquals(0, $exitCode, 'O comando app:check-channels falhou.');
-        $this->assertStringContainsString('Checking channel: Jiraiya', Artisan::output());
+        $this->assertStringContainsString('Checking channel: Placeholder Channel', Artisan::output());
+
+        unlink($mockYtDlp);
     }
 
     public function test_check_channels_command_skips_live_content_for_rbiana()
@@ -48,6 +113,20 @@ class CheckChannelsTest extends TestCase
             'cutoff_date' => '2020-01-01', // Define uma data no passado para permitir identificar os vídeos normais no teste
         ]);
 
+        $liveIds = ['Jo_DcOL5WfE', 'uv7uihW1vro', 'Z4__qS94pgc', 'ZhuAh83Hv2M', 'Uw6jgKabtf4', 'a4vQsYGJWI4', '1HkgZzYnQ7E'];
+        $regularIds = ['Hn-GPYb6WB4', 'lLMGwlNc0xU', 'hn947xnfQ_4', 'D2ImaSpbyA8', 'X-T12_2uXCE', 'E-gxs1YJN6s', 'wLD6rwUIqn0', 'NkIo_bd65o4'];
+
+        $videos = [];
+        foreach ($liveIds as $id) {
+            $videos[] = ['id' => $id, 'title' => "Live replay {$id}", 'upload_date' => '20230601', 'was_live' => true, 'media_type' => null];
+        }
+        foreach ($regularIds as $id) {
+            $videos[] = ['id' => $id, 'title' => "Video {$id}", 'upload_date' => '20230601', 'was_live' => false, 'media_type' => null];
+        }
+
+        $mockYtDlp = $this->mockYtDlpWithVideos('rbiana', $videos);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
         // Executa o comando
         Artisan::call('app:check-channels');
 
@@ -56,107 +135,92 @@ class CheckChannelsTest extends TestCase
         // 1. Assert que a saída do console indica que vídeos que foram live foram ignorados
         $this->assertStringContainsString('Originated from a live stream', $output, 'Nenhuma live gravada foi pulada ou reportada no output.');
 
-        // 2. Assert que vídeos de lives gravadas NÃO foram cadastrados no banco
-        // IDs conhecidos de lives gravadas do canal @rbiana (ex: Jo_DcOL5WfE, uv7uihW1vro, Z4__qS94pgc)
-        $liveIds = ['Jo_DcOL5WfE', 'uv7uihW1vro', 'Z4__qS94pgc', 'ZhuAh83Hv2M', 'Uw6jgKabtf4', 'a4vQsYGJWI4', '1HkgZzYnQ7E'];
-
+        // 2. Assert que vídeos de lives gravadas foram pulados e NÃO cadastrados no banco
         foreach ($liveIds as $liveId) {
-            // Se o ID foi processado no output, garantimos que foi pulado e não inserido
-            if (str_contains($output, "Skipping video {$liveId}")) {
-                $this->assertDatabaseMissing('videos', [
-                    'youtube_id' => $liveId,
-                ]);
-            }
+            $this->assertStringContainsString("Skipping video {$liveId}", $output);
+            $this->assertDatabaseMissing('videos', [
+                'youtube_id' => $liveId,
+            ]);
         }
 
         // 3. Assert que vídeos comuns do canal que não foram live FORAM cadastrados no banco
-        // IDs conhecidos de vídeos comuns do canal @rbiana (ex: Hn-GPYb6WB4, lLMGwlNc0xU, hn947xnfQ_4)
-        $regularIds = ['Hn-GPYb6WB4', 'lLMGwlNc0xU', 'hn947xnfQ_4', 'D2ImaSpbyA8', 'X-T12_2uXCE', 'E-gxs1YJN6s', 'wLD6rwUIqn0', 'NkIo_bd65o4'];
-
-        $foundRegular = false;
         foreach ($regularIds as $regularId) {
-            if (str_contains($output, "New video found: {$regularId}")) {
-                $foundRegular = true;
-                break;
-            }
+            $this->assertStringContainsString("New video found: {$regularId}", $output);
+            $this->assertDatabaseHas('videos', ['youtube_id' => $regularId]);
         }
 
-        $this->assertTrue($foundRegular, 'Nenhum dos vídeos regulares conhecidos do canal foi identificado e processado.');
+        unlink($mockYtDlp);
     }
 
-    public function test_check_channels_command_skips_youtube_shorts_for_ancapsu()
+    public function test_check_channels_command_skips_youtube_shorts()
     {
         $channel = Channel::create([
             'youtube_id' => 'UCLTWPE7XrHEe8m_xAmNbQ-Q',
-            'name' => 'ANCAPSU',
-            'url' => 'https://www.youtube.com/@ancap_su',
+            'name' => 'Shorts Channel',
+            'url' => 'https://www.youtube.com/@shorts_channel',
             'download_quality' => '720p',
             'cutoff_date' => '2020-01-01',
         ]);
 
-        Artisan::call('app:check-channels');
+        $shortIds = ['gwgmZwB1adc', 'DE3LnuEJKB8', '9oBhMeK8Wo0', 'rgsRGgbDcYQ', '60fUrg1YiM4'];
+        $regularIds = ['x4u2X4nqIN4', 'q-5yrOkczoU', '5ieN4SK8-Bs'];
+
+        $mockYtDlp = $this->mockYtDlpWithVideos('shorts_channel_skip', $this->shortsChannelVideos($shortIds, $regularIds));
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('app:check-channels', ['--channel' => $channel->id]);
 
         $output = Artisan::output();
 
         $this->assertStringContainsString('YouTube Short', $output, 'Nenhum Short foi pulado ou reportado no output.');
 
-        // IDs conhecidos de Shorts do canal @ancap_su (media_type "short" no yt-dlp)
-        $shortIds = ['gwgmZwB1adc', 'DE3LnuEJKB8', '9oBhMeK8Wo0', 'rgsRGgbDcYQ', '60fUrg1YiM4'];
-
-        $foundSkippedShort = false;
+        // Shorts devem ser pulados e não cadastrados no banco.
         foreach ($shortIds as $shortId) {
-            if (str_contains($output, "Skipping video {$shortId}: YouTube Short.")) {
-                $foundSkippedShort = true;
-                $this->assertDatabaseMissing('videos', [
-                    'youtube_id' => $shortId,
-                ]);
-            }
+            $this->assertStringContainsString("Skipping video {$shortId}: YouTube Short.", $output);
+            $this->assertDatabaseMissing('videos', [
+                'youtube_id' => $shortId,
+            ]);
         }
-        $this->assertTrue($foundSkippedShort, 'Nenhum dos Shorts conhecidos do canal foi identificado e pulado.');
 
         // Vídeos regulares (não Shorts) do mesmo canal devem continuar sendo cadastrados normalmente.
-        $regularIds = ['x4u2X4nqIN4', 'q-5yrOkczoU', '5ieN4SK8-Bs'];
-
-        $foundRegular = false;
         foreach ($regularIds as $regularId) {
-            if (str_contains($output, "New video found: {$regularId}")) {
-                $foundRegular = true;
-                break;
-            }
+            $this->assertStringContainsString("New video found: {$regularId}", $output);
         }
 
-        $this->assertTrue($foundRegular, 'Nenhum dos vídeos regulares conhecidos do canal foi identificado e processado.');
+        unlink($mockYtDlp);
     }
 
     public function test_check_channels_command_includes_shorts_when_channel_opts_in()
     {
         $channel = Channel::create([
             'youtube_id' => 'UCLTWPE7XrHEe8m_xAmNbQ-Q',
-            'name' => 'ANCAPSU Shorts Enabled',
-            'url' => 'https://www.youtube.com/@ancap_su',
+            'name' => 'Shorts Channel Enabled',
+            'url' => 'https://www.youtube.com/@shorts_channel',
             'download_quality' => '720p',
             'cutoff_date' => '2020-01-01',
             'download_shorts' => true,
         ]);
 
+        // Same known Shorts as test_check_channels_command_skips_youtube_shorts,
+        // but this time the channel opted in, so they must be queued instead of skipped.
+        $shortIds = ['gwgmZwB1adc', 'DE3LnuEJKB8', '9oBhMeK8Wo0', 'rgsRGgbDcYQ', '60fUrg1YiM4'];
+        $regularIds = ['x4u2X4nqIN4', 'q-5yrOkczoU', '5ieN4SK8-Bs'];
+
+        $mockYtDlp = $this->mockYtDlpWithVideos('shorts_channel_include', $this->shortsChannelVideos($shortIds, $regularIds));
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
         Artisan::call('app:check-channels', ['--channel' => $channel->id]);
 
         $output = Artisan::output();
 
-        // Same known Shorts as test_check_channels_command_skips_youtube_shorts_for_ancapsu,
-        // but this time the channel opted in, so they must be queued instead of skipped.
-        $shortIds = ['gwgmZwB1adc', 'DE3LnuEJKB8', '9oBhMeK8Wo0', 'rgsRGgbDcYQ', '60fUrg1YiM4'];
-
-        $foundIncludedShort = false;
         foreach ($shortIds as $shortId) {
-            if (str_contains($output, "New video found: {$shortId}")) {
-                $foundIncludedShort = true;
-                $this->assertDatabaseHas('videos', ['youtube_id' => $shortId]);
-            }
+            $this->assertStringContainsString("New video found: {$shortId}", $output);
+            $this->assertDatabaseHas('videos', ['youtube_id' => $shortId]);
         }
 
-        $this->assertTrue($foundIncludedShort, 'Nenhum Short foi incluído mesmo com download_shorts habilitado.');
         $this->assertStringNotContainsString('YouTube Short', $output, 'Um Short foi pulado mesmo com download_shorts habilitado.');
+
+        unlink($mockYtDlp);
     }
 
     public function test_check_channels_logs_a_warning_when_a_channel_check_fails()
