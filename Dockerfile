@@ -28,7 +28,9 @@ RUN composer dump-autoload --no-dev --optimize --classmap-authoritative
 # --platform=$BUILDPLATFORM: public/build is compiled static JS/CSS, not architecture-specific.
 # Building natively here is also what avoided the ~4h hang we hit once with `npm ci` stalling
 # under QEMU arm64 emulation.
-FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend
+# node 22+ (not just any node) is also the source of the `node` binary copied into the runtime
+# stage below, for yt-dlp's JS runtime — yt-dlp requires >= 22.0.0, it silently ignores older ones.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend
 
 WORKDIR /app
 
@@ -48,11 +50,15 @@ LABEL org.opencontainers.image.title="Ytoberr" \
       org.opencontainers.image.licenses="MIT"
 
 # System packages:
-#   bash/curl/tar/xz/unzip -> needed by `make setup-bins` to fetch yt-dlp/ffmpeg/deno at startup
+#   bash/curl/tar/xz/unzip -> needed by `make setup-bins` to fetch yt-dlp/ffmpeg at startup (and
+#                             deno, on non-musl systems only — see setup-bins; unzip is otherwise
+#                             unused in this image but kept as a defensive no-op)
 #   python3                -> yt-dlp ships as a python zipapp
 #   make                   -> reuses the project's Makefile (setup-bins target)
 #   supervisor             -> supervises the web server, queue worker and cron in a single container
 #   sqlite-libs            -> SQLite runtime (with FTS5) used by pdo_sqlite
+#   libstdc++/libgcc       -> runtime deps of the `node` binary copied in below (yt-dlp's JS runtime;
+#                             deno's official build is glibc-only and can't run on this musl image)
 RUN apk add --no-cache \
         bash \
         curl \
@@ -64,7 +70,9 @@ RUN apk add --no-cache \
         ca-certificates \
         tzdata \
         supervisor \
-        sqlite-libs
+        sqlite-libs \
+        libstdc++ \
+        libgcc
 
 # Install required PHP extensions
 ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/install-php-extensions
@@ -91,11 +99,13 @@ ENV APP_ENV=production \
 COPY . .
 COPY --from=vendor /app/vendor ./vendor
 COPY --from=frontend /app/public/build ./public/build
+COPY --from=frontend /usr/local/bin/node /usr/local/bin/node
 
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY docker/supervisord.conf /etc/supervisord.conf
 COPY docker/crontab /etc/crontabs/root
 COPY docker/php.ini /usr/local/etc/php/conf.d/zz-ytoberr.ini
+COPY docker/yt-dlp.conf /etc/yt-dlp.conf
 
 RUN chmod +x /usr/local/bin/entrypoint.sh \
     && mkdir -p \
