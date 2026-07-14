@@ -127,7 +127,7 @@ class DownloadNextVideo extends Command
             }
 
             // Build target file path according to Plex conventions:
-            // {downloads_dir}/{canal}/Season {YYYY}/{nome-do-arquivo}.{ext}
+            // {downloads_dir}/{channel}/Season {YYYY}/{filename}.{ext}
             $downloadsDir = Setting::getStoragePath();
             $safeChannelName = PlexNaming::sanitize($video->channel->name);
             [$year, $episode] = PlexNaming::seasonAndEpisode($video);
@@ -164,7 +164,7 @@ class DownloadNextVideo extends Command
             // Build relative file path for database storage
             $relativePath = str_replace($downloadsDir.'/', '', $targetFile);
 
-            // Copy thumbnail to destination folder as {nome-do-arquivo}.jpg: Plex's "Local Media
+            // Copy thumbnail to destination folder as {filename}.jpg: Plex's "Local Media
             // Assets" agent only recognizes an episode thumbnail that exactly matches the video's
             // own filename (just with an image extension instead), not a "-thumb" suffixed name.
             // Best-effort: a missing thumbnail shouldn't fail an otherwise-successful download.

@@ -1,44 +1,44 @@
 # Ytoberr
 
-Painel web self-hosted voltado para arquivamento local e monitoramento automatizado de canais do YouTube.
+Self-hosted web dashboard for local archiving and automated monitoring of YouTube channels.
 
-## 🚀 Funcionalidades
+## 🚀 Features
 
-- **Monitoramento Automatizado:** Verifica novos envios periodicamente.
-- **Arquivamento Organizado:** Vídeos baixados são organizados em diretórios: `{canal}/{ano}/{mes}/{video}.{ext}` (arquivo salvo como baixado pelo yt-dlp, sem reprocessamento).
-- **Compatibilidade com Plex:** Nomenclatura Plex-friendly com thumbnail salva como arquivo companheiro (`{video}-thumb.jpg`).
-- **Gestão de Qualidade:** Definição de qualidade de download por canal.
+- **Automated Monitoring:** Periodically checks for new uploads.
+- **Organized Archiving:** Downloaded videos are organized into directories: `{channel}/{year}/{month}/{video}.{ext}` (file saved exactly as downloaded by yt-dlp, without reprocessing).
+- **Plex Compatibility:** Plex-friendly naming with thumbnails saved as companion files (`{video}-thumb.jpg`).
+- **Quality Management:** Per-channel download quality setting.
 
-## 🛠️ Stack Tecnológica
+## 🛠️ Tech Stack
 
 - **Backend:** Laravel 13.x (PHP 8.4)
-- **Banco de Dados:** SQLite
-- **Download:** `yt-dlp` (o `ffmpeg` é usado apenas internamente pelo yt-dlp para mesclar formatos de áudio/vídeo separados; a aplicação não invoca o ffmpeg diretamente)
+- **Database:** SQLite
+- **Download:** `yt-dlp` (`ffmpeg` is only used internally by yt-dlp to merge separate audio/video formats; the application never invokes ffmpeg directly)
 
-## ⚙️ Instalação
+## ⚙️ Installation
 
-1. Clone o repositório.
-2. Instale as dependências: `composer install`.
-3. Configure o arquivo `.env` (baseado no `.env.example`).
-4. Execute as migrações: `php artisan migrate`.
-5. Baixe e configure as dependências binárias (`yt-dlp`, `ffmpeg`, `ffprobe`): `make setup-bins`.
+1. Clone the repository.
+2. Install dependencies: `composer install`.
+3. Configure the `.env` file (based on `.env.example`).
+4. Run migrations: `php artisan migrate`.
+5. Download and set up the binary dependencies (`yt-dlp`, `ffmpeg`, `ffprobe`): `make setup-bins`.
 
-## 🖥️ Comandos de Desenvolvimento (Makefile)
+## 🖥️ Development Commands (Makefile)
 
- O projeto inclui um `Makefile` com atalhos úteis:
+The project includes a `Makefile` with useful shortcuts:
 
-- `make setup-bins`: Baixa e configura as dependências binárias (`yt-dlp`, `ffmpeg`, `ffprobe`) na pasta `bin/`.
-- `make serve`: Inicia o servidor de desenvolvimento.
-- `make queue-bg`: Inicia o worker de filas em background.
-- `make queue-stop`: Para o worker de filas.
-- `make migrate`: Executa as migrações.
-- `make cache-clear`: Limpa os caches do Laravel.
+- `make setup-bins`: Downloads and sets up the binary dependencies (`yt-dlp`, `ffmpeg`, `ffprobe`) into the `bin/` folder.
+- `make serve`: Starts the development server.
+- `make queue-bg`: Starts the queue worker in the background.
+- `make queue-stop`: Stops the queue worker.
+- `make migrate`: Runs migrations.
+- `make cache-clear`: Clears Laravel caches.
 
-## 🐳 Docker (Recomendado)
+## 🐳 Docker (Recommended)
 
-A forma mais simples de instalar e rodar o Ytoberr é via Docker. A imagem já inclui o cron do scheduler do Laravel, o worker de filas e faz o download automático de `yt-dlp`/`ffmpeg`/`ffprobe` na primeira execução, além de rodar as migrações automaticamente.
+The simplest way to install and run Ytoberr is via Docker. The image already includes the Laravel scheduler's cron, the queue worker, and automatically downloads `yt-dlp`/`ffmpeg`/`ffprobe` on first run, in addition to running migrations automatically.
 
-Uma imagem pronta (multi-arquitetura, `amd64`/`arm64`) é publicada automaticamente no GitHub Container Registry a cada push na `main` (tag `latest`) e a cada release `vX.Y.Z` (tags de versão), via [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml). Para usá-la sem clonar o repositório, basta:
+A ready-to-use image (multi-architecture, `amd64`/`arm64`) is automatically published to the GitHub Container Registry on every push to `main` (tag `latest`) and on every `vX.Y.Z` release (version tags), via [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml). To use it without cloning the repository, simply:
 
 ```bash
 docker run -d --name ytoberr -p 8080:8080 \
@@ -47,26 +47,26 @@ docker run -d --name ytoberr -p 8080:8080 \
   ghcr.io/lucaslealdev/ytoberr:latest
 ```
 
-Se preferir clonar o repositório e usar Docker Compose (builda localmente por padrão; use `YTOBERR_IMAGE=ghcr.io/lucaslealdev/ytoberr:latest docker compose up -d` para baixar a imagem publicada em vez de buildar):
+If you'd rather clone the repository and use Docker Compose (builds locally by default; use `YTOBERR_IMAGE=ghcr.io/lucaslealdev/ytoberr:latest docker compose up -d` to pull the published image instead of building):
 
 ```bash
 docker compose up -d --build
 ```
 
-A aplicação sobe em `http://localhost:8080` (ajustável via `APP_PORT`/`APP_URL`).
+The application comes up at `http://localhost:8080` (adjustable via `APP_PORT`/`APP_URL`).
 
-Dados persistentes (definidos no `docker-compose.yml`):
+Persistent data (defined in `docker-compose.yml`):
 
-- `ytoberr-storage` (volume nomeado): banco SQLite (`storage/app/database.sqlite`), vídeos, thumbnails e demais arquivos gerados (`storage/app`). Fica tudo num único volume de propósito porque o SQLite mora dentro de `storage/app` — não há um volume separado para o banco.
-- `./bin` (bind mount para a pasta `bin/` do projeto): se `yt-dlp`/`ffmpeg`/`ffprobe` já existirem aí (por exemplo, de um `make setup-bins` local anterior), o container os reaproveita direto, sem baixar nada. Se a pasta estiver vazia, o container baixa os binários automaticamente e os deixa salvos ali para as próximas subidas.
+- `ytoberr-storage` (named volume): SQLite database (`storage/app/database.sqlite`), videos, thumbnails, and other generated files (`storage/app`). It's all in a single purpose-built volume because SQLite lives inside `storage/app` — there's no separate volume for the database.
+- `./bin` (bind mount to the project's `bin/` folder): if `yt-dlp`/`ffmpeg`/`ffprobe` already exist there (e.g., from a previous local `make setup-bins`), the container reuses them directly without downloading anything. If the folder is empty, the container downloads the binaries automatically and keeps them there for future startups.
 
-Variáveis úteis (podem ser definidas num `.env` ao lado do `docker-compose.yml` ou exportadas no shell):
+Useful variables (can be set in a `.env` next to `docker-compose.yml` or exported in the shell):
 
-- `APP_URL` / `APP_PORT`: URL e porta pública da aplicação (padrão `http://localhost:8080` / `8080`).
-- `APP_KEY`: chave de criptografia do Laravel. Se omitida, é gerada automaticamente no primeiro boot (recomenda-se fixá-la para persistir entre recriações do container).
-- `TZ`: fuso horário do container (padrão `UTC`).
+- `APP_URL` / `APP_PORT`: the application's public URL and port (defaults to `http://localhost:8080` / `8080`).
+- `APP_KEY`: Laravel's encryption key. If omitted, it's generated automatically on first boot (recommended to pin it so it persists across container recreations).
+- `TZ`: the container's timezone (default `UTC`).
 
-Sem Docker Compose, o mesmo resultado pode ser obtido com:
+Without Docker Compose, the same result can be achieved with:
 
 ```bash
 docker build -t ytoberr .
@@ -76,42 +76,42 @@ docker run -d --name ytoberr -p 8080:8080 \
   ytoberr
 ```
 
-## 🏷️ Versionamento
+## 🏷️ Versioning
 
-O projeto segue [Versionamento Semântico](https://semver.org/lang/pt-BR/) (`MAJOR.MINOR.PATCH`). A versão atual fica no arquivo [`VERSION`](VERSION) na raiz do projeto e é exibida no rodapé do painel.
+The project follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`). The current version lives in the [`VERSION`](VERSION) file at the project root and is displayed in the dashboard's footer.
 
-Para lançar uma nova versão:
+To release a new version:
 
-1. Atualize o arquivo `VERSION` (ex.: `1.1.0`).
-2. Commit e crie uma tag git correspondente com o prefixo `v`:
+1. Update the `VERSION` file (e.g., `1.1.0`).
+2. Commit and create a matching git tag with the `v` prefix:
    ```bash
    git commit -am "chore: bump version to 1.1.0"
    git tag v1.1.0
    git push origin main --tags
    ```
-3. O push da tag `vX.Y.Z` dispara o [workflow do Docker](.github/workflows/docker-publish.yml), que publica `ghcr.io/lucaslealdev/ytoberr:1.1.0` (e atualiza `:latest`, já que a tag entra pela `main`).
+3. Pushing the `vX.Y.Z` tag triggers the [Docker workflow](.github/workflows/docker-publish.yml), which publishes `ghcr.io/lucaslealdev/ytoberr:1.1.0` (and updates `:latest`, since the tag lands on `main`).
 
-## 📅 Agendamentos & Filas (Produção sem Docker)
+## 📅 Scheduling & Queues (Production without Docker)
 
-Se preferir rodar fora de Docker, configure manualmente os serviços abaixo para garantir que o Ytoberr monitore novos vídeos e processe os downloads em segundo plano de forma contínua (ao usar Docker, ambos já vêm configurados dentro do container):
+If you'd rather run outside Docker, manually configure the services below to ensure Ytoberr continuously monitors for new videos and processes downloads in the background (when using Docker, both are already configured inside the container):
 
-### 1. Agendador de Tarefas (Cron Job)
-O Laravel utiliza um único Cron Job para gerenciar todos os agendamentos internos (como a verificação de novos vídeos de 3 em 3 horas).
-Abra o crontab do Linux (`crontab -e`) e adicione a seguinte linha:
+### 1. Task Scheduler (Cron Job)
+Laravel uses a single Cron Job to manage all internal scheduling (such as checking for new videos every 3 hours).
+Open the Linux crontab (`crontab -e`) and add the following line:
 
 ```bash
 * * * * * cd /home/lucas/ytoberr && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-*(Substitua `/home/lucas/ytoberr` pelo caminho absoluto correto da instalação do seu projeto).*
+*(Replace `/home/lucas/ytoberr` with the correct absolute path of your project installation).*
 
-### 2. Processamento de Filas (Queue Worker)
-Os downloads pesados de vídeos e thumbnails são despachados para filas em segundo plano para não travar a interface web.
+### 2. Queue Processing (Queue Worker)
+Heavy video and thumbnail downloads are dispatched to background queues so they don't block the web interface.
 
-*   **Desenvolvimento:** Utilize `make queue-bg` para ligar o worker em background e `make queue-stop` para pará-lo.
-*   **Produção (Supervisor):** É altamente recomendado rodar o gerenciador de processos **Supervisor** para manter o worker de filas ativo constantemente e reiniciar automaticamente caso falhe.
+*   **Development:** Use `make queue-bg` to start the worker in the background and `make queue-stop` to stop it.
+*   **Production (Supervisor):** It's highly recommended to run the **Supervisor** process manager to keep the queue worker constantly active and automatically restart it if it fails.
 
-Exemplo de configuração do Supervisor (`/etc/supervisor/conf.d/ytoberr-worker.conf`):
+Example Supervisor configuration (`/etc/supervisor/conf.d/ytoberr-worker.conf`):
 
 ```ini
 [program:ytoberr-worker]
@@ -128,16 +128,15 @@ stdout_logfile=/home/lucas/ytoberr/storage/logs/worker.log
 stopwaitsecs=3600
 ```
 
-*(Ajuste o `user`, caminhos absolutos e logs conforme as permissões de ambiente do seu servidor).*
+*(Adjust the `user`, absolute paths, and logs according to your server's environment permissions).*
 
-## 🙏 Créditos
+## 🙏 Credits
 
-Este projeto só existe por ter sido construído sobre o ombro de gigantes:
+This project only exists by standing on the shoulders of giants:
 
-- **[yt-dlp](https://github.com/yt-dlp/yt-dlp)** — o motor de download e extração de metadados por trás de todo o arquivamento.
-- **[Pinchflat](https://github.com/kieraneglin/pinchflat)** — referência direta de arquitetura e convenções (nomenclatura de arquivos compatível com Plex, geração de NFO, numeração de episódio por data/índice, entre outras).
+- **[yt-dlp](https://github.com/yt-dlp/yt-dlp)** — the download and metadata extraction engine behind all archiving.
+- **[Pinchflat](https://github.com/kieraneglin/pinchflat)** — direct reference for architecture and conventions (Plex-compatible file naming, NFO generation, episode numbering by date/index, among others).
 
-## 📄 Licença
+## 📄 License
 
-Este projeto é open-sourced sob a [MIT license](https://opensource.org/licenses/MIT).
-
+This project is open-sourced under the [MIT license](https://opensource.org/licenses/MIT).

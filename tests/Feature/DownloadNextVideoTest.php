@@ -83,7 +83,7 @@ BASH);
         $this->assertNotNull($video->file_path);
 
         // Assert relative file path structure targets Plex:
-        // {downloads_dir}/{canal}/Season {YYYY}/{nome-do-arquivo}.{ext}
+        // {downloads_dir}/{channel}/Season {YYYY}/{filename}.{ext}
         $this->assertStringContainsString('Space Channel/Season 2026', $video->file_path);
         $this->assertStringContainsString('Landing on Mars [space_vid_123].mp4', $video->file_path);
 
