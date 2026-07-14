@@ -91,10 +91,16 @@ class CheckChannelsForNewVideos extends Command
                     continue;
                 }
 
+                // Prefer the Unix epoch 'timestamp' field, which carries the actual publish
+                // time; 'upload_date' is day-only (YYYYMMDD) and would otherwise collapse
+                // every video into a fake midnight, losing the real order of same-day uploads.
+                $publishedAt = isset($metadata['timestamp'])
+                    ? Carbon::createFromTimestamp($metadata['timestamp'])
+                    : (isset($metadata['upload_date'])
+                        ? Carbon::parse($metadata['upload_date'])
+                        : now());
+
                 // Check if the video was published before the channel's cut-off date (cutoff_date)
-                $publishedAt = isset($metadata['upload_date'])
-                    ? Carbon::parse($metadata['upload_date'])
-                    : now();
 
                 if ($channel->cutoff_date && $publishedAt->lt(Carbon::parse($channel->cutoff_date))) {
                     $this->info("Skipping video {$videoId}: published before channel cut-off date ({$channel->cutoff_date}).");
