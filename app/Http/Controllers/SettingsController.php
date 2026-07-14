@@ -30,8 +30,11 @@ class SettingsController extends Controller
         $latestVersion = $updateChecker->latestVersion();
         $updateAvailable = $updateChecker->isNewer(config('app.version'), $latestVersion);
 
+        $ytdlpDelaySeconds = Setting::ytdlpDelaySeconds();
+
         return view('settings.index', compact(
-            'ytDlpVersion', 'storagePath', 'cacheCount', 'queuedVideos', 'latestVersion', 'updateAvailable'
+            'ytDlpVersion', 'storagePath', 'cacheCount', 'queuedVideos', 'latestVersion', 'updateAvailable',
+            'ytdlpDelaySeconds'
         ));
     }
 
@@ -73,6 +76,17 @@ class SettingsController extends Controller
         Setting::set('storage_path', $request->storage_path);
 
         return back()->with('status', 'Storage path updated successfully!');
+    }
+
+    public function updateYtdlpDelay(Request $request)
+    {
+        $request->validate([
+            'ytdlp_delay_seconds' => ['required', 'integer', 'min:0', 'max:120'],
+        ]);
+
+        Setting::set('ytdlp_delay_seconds', (string) $request->ytdlp_delay_seconds);
+
+        return back()->with('status', 'yt-dlp request delay updated successfully!');
     }
 
     public function checkMissingVideos()

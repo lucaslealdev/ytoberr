@@ -3,13 +3,25 @@
 namespace Tests\Feature;
 
 use App\Models\Channel;
+use App\Models\Setting;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Sleep;
 use Tests\TestCase;
 
 class CheckChannelsTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Most of these tests hit the real yt-dlp binary against real YouTube channels;
+        // the production safety delay between requests would only slow the suite down
+        // without adding value.
+        Setting::set('ytdlp_delay_seconds', '0');
+    }
 
     public function test_check_channels_command_runs_successfully()
     {
@@ -114,5 +126,58 @@ class CheckChannelsTest extends TestCase
         }
 
         $this->assertTrue($foundRegular, 'Nenhum dos vídeos regulares conhecidos do canal foi identificado e processado.');
+    }
+
+    public function test_check_channels_sleeps_between_the_two_ytdlp_calls_for_the_same_channel()
+    {
+        // Each channel makes two separate yt-dlp processes (live_status precheck, then the
+        // playlist listing). --sleep-requests only throttles requests *within* one of those
+        // processes, so the gap between the two calls has to be an explicit sleep in the loop.
+        Sleep::fake();
+        Setting::set('ytdlp_delay_seconds', '3');
+
+        Channel::create(['youtube_id' => 'UC_sleep_single_chan', 'name' => 'Sleep Single Channel', 'url' => 'https://example.com/sleepsingle']);
+
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_sleep_single.sh');
+        file_put_contents($mockYtDlp, "#!/bin/bash\nexit 0\n");
+        chmod($mockYtDlp, 0755);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('app:check-channels');
+
+        // A single channel has no "next channel" to sleep before, but must still sleep once
+        // between its own two yt-dlp calls.
+        Sleep::assertSequence([
+            Sleep::for(3)->seconds(),
+        ]);
+
+        unlink($mockYtDlp);
+    }
+
+    public function test_check_channels_sleeps_between_channels_but_not_before_the_first_or_after_the_last()
+    {
+        // --sleep-requests only throttles requests *within* a single yt-dlp process. With
+        // multiple channels, this command fires a fresh yt-dlp process per channel, so the
+        // real protection against hammering YouTube has to be an actual sleep between
+        // channels in the PHP loop itself — that's what this test verifies.
+        Sleep::fake();
+        Setting::set('ytdlp_delay_seconds', '3');
+
+        Channel::create(['youtube_id' => 'UC_sleep_test_a', 'name' => 'Sleep Test Channel A', 'url' => 'https://example.com/sleeptesta']);
+        Channel::create(['youtube_id' => 'UC_sleep_test_b', 'name' => 'Sleep Test Channel B', 'url' => 'https://example.com/sleeptestb']);
+        Channel::create(['youtube_id' => 'UC_sleep_test_c', 'name' => 'Sleep Test Channel C', 'url' => 'https://example.com/sleeptestc']);
+
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_sleep_test.sh');
+        file_put_contents($mockYtDlp, "#!/bin/bash\nexit 0\n");
+        chmod($mockYtDlp, 0755);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('app:check-channels');
+
+        // 3 channels: 1 within-channel sleep each (3) + 1 between-channel gap for each of the
+        // 2 transitions (2) = 5 total.
+        Sleep::assertSleptTimes(5);
+
+        unlink($mockYtDlp);
     }
 }

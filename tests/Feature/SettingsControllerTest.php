@@ -142,6 +142,29 @@ class SettingsControllerTest extends TestCase
         $response->assertDontSee('Update available');
     }
 
+    public function test_update_ytdlp_delay_persists_the_setting()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->post('/settings/ytdlp-delay', [
+            'ytdlp_delay_seconds' => 15,
+        ]);
+
+        $response->assertRedirect();
+        $this->assertSame(15, Setting::ytdlpDelaySeconds());
+    }
+
+    public function test_update_ytdlp_delay_rejects_a_negative_value()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->post('/settings/ytdlp-delay', [
+            'ytdlp_delay_seconds' => -1,
+        ]);
+
+        $response->assertSessionHasErrors('ytdlp_delay_seconds');
+    }
+
     public function test_update_storage_path_persists_the_setting()
     {
         $user = User::factory()->create();

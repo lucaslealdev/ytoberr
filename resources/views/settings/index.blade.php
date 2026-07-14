@@ -48,6 +48,18 @@
                         <button type="submit" class="bg-green-600 text-white p-2 rounded hover:bg-green-700">Check for Updates & Update</button>
                     </form>
                 </div>
+
+                <div class="pt-4 mt-4 border-t border-gray-800">
+                    <form action="/settings/ytdlp-delay" method="POST" class="space-y-2">
+                        @csrf
+                        <label class="block text-gray-400 text-sm mb-1">Request Delay (seconds)</label>
+                        <p class="text-xs text-gray-500">Sleep between yt-dlp requests and downloads, to avoid triggering YouTube's IP rate-limiting.</p>
+                        <div class="flex items-center gap-2">
+                            <input type="number" name="ytdlp_delay_seconds" min="0" max="120" value="{{ old('ytdlp_delay_seconds', $ytdlpDelaySeconds) }}" class="w-24 p-2 bg-gray-800 border border-gray-700 rounded text-gray-100">
+                            <button type="submit" class="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 text-sm">Save</button>
+                        </div>
+                    </form>
+                </div>
             </div>
 
             <div class="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800">
