@@ -24,8 +24,8 @@ class UpdateToolsJob implements ShouldQueue
     public function handle(): void
     {
         // Run make setup-bins to download/update binaries to bin/
-        exec('make setup-bins');
-        
-        Log::info("Tool updates initiated via make setup-bins.");
+        exec('make setup-bins 2>&1');
+
+        Log::info('Tool updates initiated via make setup-bins.');
     }
 }
