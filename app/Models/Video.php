@@ -10,7 +10,7 @@ use Illuminate\Support\Carbon;
 class Video extends Model
 {
     protected $fillable = [
-        'channel_id', 'youtube_id', 'title', 'description', 'published_at',
+        'channel_id', 'youtube_id', 'title', 'description', 'published_at', 'duration',
         'file_path', 'thumbnail_path', 'status', 'retries', 'last_error',
         'prevent_download', 'unavailable_reason', 'downloaded_at',
     ];
@@ -67,6 +67,27 @@ class Video extends Model
         }
 
         return route('media.show', ['path' => $this->file_path]);
+    }
+
+    /**
+     * Human-readable video length ("1:23:45" or "4:32"), or null if unknown (videos
+     * discovered before the duration field was captured won't have one).
+     */
+    public function formattedDuration(): ?string
+    {
+        if ($this->duration === null) {
+            return null;
+        }
+
+        $hours = intdiv($this->duration, 3600);
+        $minutes = intdiv($this->duration % 3600, 60);
+        $seconds = $this->duration % 60;
+
+        if ($hours > 0) {
+            return sprintf('%d:%02d:%02d', $hours, $minutes, $seconds);
+        }
+
+        return sprintf('%d:%02d', $minutes, $seconds);
     }
 
     /**

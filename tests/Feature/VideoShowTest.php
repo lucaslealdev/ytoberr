@@ -6,7 +6,9 @@ use App\Models\Channel;
 use App\Models\Setting;
 use App\Models\User;
 use App\Models\Video;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Number;
 use Tests\TestCase;
 
 class VideoShowTest extends TestCase
@@ -98,6 +100,50 @@ class VideoShowTest extends TestCase
             'href="'.$video->videoUrl().'" download',
             $response->getContent()
         );
+    }
+
+    public function test_video_show_page_displays_publish_time_duration_file_size_and_youtube_link()
+    {
+        $user = User::factory()->create();
+
+        $channel = Channel::create([
+            'youtube_id' => 'UC_details_chan',
+            'name' => 'Details Channel',
+            'url' => 'https://example.com/details',
+        ]);
+
+        $downloadsDir = Setting::getStoragePath();
+        $videoDir = $downloadsDir.'/Details Channel/Season 2026';
+        mkdir($videoDir, 0755, true);
+
+        $relativePath = 'Details Channel/Season 2026/Details Channel - s2026e0710 - Details Video [details_vid].mp4';
+        file_put_contents($downloadsDir.'/'.$relativePath, str_repeat('a', 2048));
+
+        $publishedAt = Carbon::create(2026, 7, 10, 14, 30, 0, 'UTC');
+        $downloadedAt = Carbon::create(2026, 7, 10, 15, 0, 0, 'UTC');
+
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'details_vid',
+            'title' => 'Details Video',
+            'published_at' => $publishedAt,
+            'duration' => 754, // 12:34
+            'status' => 'completed',
+            'file_path' => $relativePath,
+            'downloaded_at' => $downloadedAt,
+        ]);
+
+        $response = $this->actingAs($user)->get('/videos/'.$video->id);
+
+        $response->assertStatus(200);
+        $response->assertSee($publishedAt->format('M d, Y'));
+        $response->assertSee($publishedAt->format('g:i A'));
+        $response->assertSee('12:34');
+        $response->assertSee($downloadedAt->format('M d, Y'));
+        $response->assertSee(Number::fileSize(2048, precision: 1));
+        $response->assertSee('https://www.youtube.com/watch?v=details_vid', false);
+
+        exec('rm -rf '.escapeshellarg($downloadsDir.'/Details Channel'));
     }
 
     public function test_video_without_file_shows_unavailable_message_instead_of_player()
