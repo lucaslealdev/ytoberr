@@ -9,6 +9,7 @@ use App\Models\Video;
 use App\Models\Warning;
 use App\Models\YtDlpCache;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -41,6 +42,11 @@ class SettingsControllerTest extends TestCase
         $downloadsDir = Setting::getStoragePath();
         if (file_exists($downloadsDir.'/Settings Test Channel')) {
             exec('rm -rf '.escapeshellarg($downloadsDir.'/Settings Test Channel'));
+        }
+
+        $cookiesPath = storage_path('app/cookies.txt');
+        if (file_exists($cookiesPath)) {
+            unlink($cookiesPath);
         }
 
         parent::tearDown();
@@ -367,5 +373,99 @@ class SettingsControllerTest extends TestCase
         $response->assertRedirect();
         $this->assertDatabaseMissing('videos', ['id' => $missingVideo->id]);
         $this->assertDatabaseHas('videos', ['id' => $existingVideo->id]);
+    }
+
+    public function test_settings_page_shows_no_cookies_configured_by_default()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get('/settings');
+
+        $response->assertStatus(200);
+        $response->assertSee('No cookies configured');
+    }
+
+    public function test_can_upload_a_valid_cookies_file()
+    {
+        $user = User::factory()->create();
+
+        $content = "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t1799999999\tSID\tabc123\n";
+        $file = UploadedFile::fake()->createWithContent('cookies.txt', $content);
+
+        $response = $this->actingAs($user)->post('/settings/cookies', [
+            'cookies_file' => $file,
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHasNoErrors();
+        $this->assertFileExists(storage_path('app/cookies.txt'));
+        $this->assertSame($content, file_get_contents(storage_path('app/cookies.txt')));
+
+        $settingsResponse = $this->actingAs($user)->get('/settings');
+        $settingsResponse->assertSee('Cookies configured');
+    }
+
+    public function test_can_paste_valid_cookies_text()
+    {
+        $user = User::factory()->create();
+
+        $content = "# HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t1799999999\tSID\tabc123\n";
+
+        $response = $this->actingAs($user)->post('/settings/cookies', [
+            'cookies_text' => $content,
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHasNoErrors();
+        // The global TrimStrings middleware trims the outer whitespace of form fields
+        // (including a trailing newline), which doesn't affect the file's validity.
+        $this->assertSame(trim($content), file_get_contents(storage_path('app/cookies.txt')));
+    }
+
+    public function test_normalizes_windows_line_endings_when_saving_cookies()
+    {
+        $user = User::factory()->create();
+
+        $content = "# Netscape HTTP Cookie File\r\n.youtube.com\tTRUE\t/\tTRUE\t1799999999\tSID\tabc123\r\n";
+
+        $response = $this->actingAs($user)->post('/settings/cookies', [
+            'cookies_text' => $content,
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHasNoErrors();
+        $this->assertStringNotContainsString("\r", file_get_contents(storage_path('app/cookies.txt')));
+    }
+
+    public function test_rejects_cookies_content_without_the_required_first_line()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->post('/settings/cookies', [
+            'cookies_text' => "this is not a cookies file\nrandom text here\n",
+        ]);
+
+        $response->assertSessionHasErrors('cookies_file');
+        $this->assertFileDoesNotExist(storage_path('app/cookies.txt'));
+    }
+
+    public function test_rejects_the_cookies_form_when_neither_file_nor_text_is_provided()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->post('/settings/cookies', []);
+
+        $response->assertSessionHasErrors('cookies_file');
+    }
+
+    public function test_can_remove_configured_cookies()
+    {
+        $user = User::factory()->create();
+        file_put_contents(storage_path('app/cookies.txt'), "# Netscape HTTP Cookie File\n");
+
+        $response = $this->actingAs($user)->delete('/settings/cookies');
+
+        $response->assertRedirect();
+        $this->assertFileDoesNotExist(storage_path('app/cookies.txt'));
     }
 }

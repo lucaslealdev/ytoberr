@@ -9,6 +9,7 @@ use App\Models\Warning;
 use App\Models\YtDlpCache;
 use App\Services\BackupService;
 use App\Services\UpdateChecker;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
@@ -31,9 +32,14 @@ class SettingsController extends Controller
         $warnings = Warning::with('video')->latest()->get();
         $backupsList = $backups->list();
 
+        $cookiesPath = storage_path('app/cookies.txt');
+        $cookiesConfigured = file_exists($cookiesPath);
+        $cookiesUpdatedAt = $cookiesConfigured ? Carbon::createFromTimestamp(filemtime($cookiesPath)) : null;
+
         return view('settings.index', compact(
             'ytDlpVersion', 'storagePath', 'cacheCount', 'latestVersion', 'updateAvailable',
-            'ytdlpDelaySeconds', 'advancedModeEnabled', 'warnings', 'backupsList'
+            'ytdlpDelaySeconds', 'advancedModeEnabled', 'warnings', 'backupsList',
+            'cookiesConfigured', 'cookiesUpdatedAt'
         ));
     }
 
@@ -93,6 +99,47 @@ class SettingsController extends Controller
         Setting::set('advanced_mode', $request->boolean('advanced_mode') ? '1' : '0');
 
         return back()->with('status', 'Advanced mode updated successfully!');
+    }
+
+    public function updateCookies(Request $request)
+    {
+        $request->validate([
+            'cookies_file' => ['nullable', 'file'],
+            'cookies_text' => ['nullable', 'string'],
+        ]);
+
+        if ($request->hasFile('cookies_file')) {
+            $content = file_get_contents($request->file('cookies_file')->getRealPath());
+        } elseif ($request->filled('cookies_text')) {
+            $content = $request->string('cookies_text')->toString();
+        } else {
+            return back()->withErrors(['cookies_file' => 'Upload a cookies file or paste its contents below.']);
+        }
+
+        // Netscape cookie files may be exported with Windows line endings; normalize to LF
+        // since yt-dlp runs on Linux here and a mismatched newline format can produce a
+        // confusing "HTTP Error 400: Bad Request" instead of a clear parsing error.
+        $content = str_replace(["\r\n", "\r"], "\n", $content);
+
+        $firstLine = trim(strtok($content, "\n"));
+        if (! in_array($firstLine, ['# HTTP Cookie File', '# Netscape HTTP Cookie File'], true)) {
+            return back()->withErrors(['cookies_file' => 'This does not look like a valid Netscape-format cookies file. The first line must be exactly "# HTTP Cookie File" or "# Netscape HTTP Cookie File".']);
+        }
+
+        file_put_contents(storage_path('app/cookies.txt'), $content);
+
+        return back()->with('status', 'Cookies saved successfully!');
+    }
+
+    public function deleteCookies()
+    {
+        $path = storage_path('app/cookies.txt');
+
+        if (file_exists($path)) {
+            unlink($path);
+        }
+
+        return back()->with('status', 'Cookies removed.');
     }
 
     public function checkMissingVideos()
