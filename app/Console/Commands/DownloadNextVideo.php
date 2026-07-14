@@ -6,6 +6,7 @@ use App\Models\Setting;
 use App\Models\Video;
 use App\Models\Warning;
 use App\Services\PlexAssetService;
+use App\Services\YtDlpWrapper;
 use App\Support\PlexNaming;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -18,7 +19,7 @@ class DownloadNextVideo extends Command
 
     protected $description = 'Pulls the next pending video from the database queue and downloads it using yt-dlp, storing it alongside a companion thumbnail using Plex-friendly naming.';
 
-    public function handle(PlexAssetService $plexAssets)
+    public function handle(PlexAssetService $plexAssets, YtDlpWrapper $ytDlpWrapper)
     {
         $this->info('Starting download queue processor...');
 
@@ -91,9 +92,10 @@ class DownloadNextVideo extends Command
         $this->info('Running yt-dlp download...');
         Log::info('DownloadNextVideo executing: '.$command);
 
-        $output = [];
-        $resultCode = 0;
-        exec($command, $output, $resultCode);
+        // 30 minutes: generous enough for a large video over a slow connection, while still
+        // guaranteeing a hung download gets killed outright instead of blocking this command
+        // (and the every-2-minutes schedule behind it, via withoutOverlapping()) forever.
+        [$output, $resultCode] = $ytDlpWrapper->runCommand($command, 1800);
 
         $rawOutput = implode("\n", $output);
 

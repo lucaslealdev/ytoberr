@@ -6,9 +6,63 @@ use App\Models\Setting;
 use App\Models\YtDlpCache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
+use Symfony\Component\Process\Process;
 
 class YtDlpWrapper
 {
+    /**
+     * How long a single-item yt-dlp metadata fetch (channel info or a live_status precheck)
+     * is allowed to run before being killed. Both are small, single-URL requests, so this only
+     * needs generous margin over normal network latency, not room for a large listing.
+     */
+    private const METADATA_TIMEOUT_SECONDS = 90;
+
+    /**
+     * Run a yt-dlp shell command with a hard timeout that actually kills the process (and any
+     * children it spawned) if it runs too long. PHP's exec() can't do this: once started, a
+     * hung/slow child process keeps running even after the caller (e.g. a queued job) gives up
+     * on it, leaking an orphaned yt-dlp process that competes with the next attempt for
+     * network/CPU and makes it more likely to time out too.
+     *
+     * @return array{0: array<int, string>, 1: int} [output lines, exit code]
+     */
+    public function runCommand(string $command, int $timeoutSeconds): array
+    {
+        // The leading "exec" makes the shell replace itself with the command instead of
+        // forking a child for it (Symfony only adds this automatically for array-form
+        // commands, not the shell-string form used here) — without it, Symfony's tracked PID
+        // is just the wrapper shell, one level removed from the actual yt-dlp process.
+        $process = Process::fromShellCommandline('exec '.$command);
+        $process->setTimeout($timeoutSeconds);
+        $process->start();
+
+        // Move the process into its own new process group (separate from PHP's own), so that
+        // on timeout we can kill that whole group — including any subprocess yt-dlp itself
+        // spawns (e.g. ffmpeg, to merge formats) — without touching PHP's own process.
+        // Symfony's own kill only signals the single directly-tracked PID, which isn't enough:
+        // a child that process forks doesn't die with it and is left running as an orphan.
+        if ($pid = $process->getPid()) {
+            posix_setpgid($pid, $pid);
+        }
+
+        try {
+            $process->wait();
+        } catch (ProcessTimedOutException) {
+            if ($pid) {
+                posix_kill(-$pid, SIGKILL);
+            }
+
+            Log::error("yt-dlp command timed out after {$timeoutSeconds}s and was killed: {$command}");
+
+            return [["Command timed out after {$timeoutSeconds} seconds."], 124];
+        }
+
+        $output = preg_split('/\r\n|\r|\n/', rtrim($process->getOutput()), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        return [$output, $process->getExitCode() ?? 1];
+    }
+
     /**
      * Retrieve metadata for a given URL using yt-dlp.
      * Uses --print-to-file for selective video metadata to prevent stdout pollution.
@@ -61,9 +115,7 @@ class YtDlpWrapper
 
             Log::info('YtDlpWrapper running full dump: '.$command);
 
-            $output = [];
-            $resultCode = 0;
-            exec($command, $output, $resultCode);
+            [$output, $resultCode] = $this->runCommand($command, self::METADATA_TIMEOUT_SECONDS);
 
             if ($resultCode !== 0) {
                 Log::error("YtDlpWrapper full dump failed with code {$resultCode}");
@@ -132,9 +184,7 @@ class YtDlpWrapper
 
             Log::info('YtDlpWrapper running print-to-file: '.$command);
 
-            $output = [];
-            $resultCode = 0;
-            exec($command, $output, $resultCode);
+            [$output, $resultCode] = $this->runCommand($command, self::METADATA_TIMEOUT_SECONDS);
 
             if ($resultCode !== 0) {
                 Log::error("YtDlpWrapper print-to-file failed with exit code {$resultCode}");

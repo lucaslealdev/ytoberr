@@ -121,6 +121,45 @@ BASH;
         unlink($mockYtDlp);
     }
 
+    public function test_run_command_kills_the_process_instead_of_leaving_it_running_when_it_times_out()
+    {
+        // Regression test for a production incident: PHP's exec() has no way to kill a child
+        // process once it's running, so a command that overran the queue job's timeout kept
+        // running as an orphan, competing with (and slowing down) every retry until the
+        // server ran out of capacity. runCommand() must actually terminate the process tree.
+        $script = storage_path('app/temp/mock_slow_command.sh');
+        $pidFile = storage_path('app/temp/mock_slow_command.pid');
+        if (file_exists($pidFile)) {
+            unlink($pidFile);
+        }
+
+        file_put_contents($script, <<<BASH
+#!/bin/bash
+echo \$\$ > {$pidFile}
+sleep 10
+BASH);
+        chmod($script, 0755);
+
+        $wrapper = new YtDlpWrapper;
+
+        $start = microtime(true);
+        [$output, $resultCode] = $wrapper->runCommand($script, 1);
+        $elapsed = microtime(true) - $start;
+
+        $this->assertLessThan(8, $elapsed, 'runCommand() should return shortly after the 1s timeout, not wait out the full 10s sleep.');
+        $this->assertEquals(124, $resultCode);
+
+        $this->assertFileExists($pidFile);
+        $pid = (int) trim(file_get_contents($pidFile));
+
+        // Give the OS a brief moment to fully reap the killed process before checking.
+        usleep(300000);
+        $this->assertFalse(posix_kill($pid, 0), 'The spawned process should have been killed, not left running as an orphan.');
+
+        unlink($script);
+        unlink($pidFile);
+    }
+
     public function test_can_reset_ytdlp_cache()
     {
         $user = User::factory()->create();

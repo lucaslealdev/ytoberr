@@ -12,13 +12,13 @@ class CheckChannelForNewVideosJob implements ShouldQueue
     use Queueable;
 
     /**
-     * app:check-channels makes two separate yt-dlp calls with the configurable
-     * ytdlp_delay_seconds sleep between them (up to 120s), plus real network time for each
-     * yt-dlp call itself. That routinely exceeds the queue worker's default 60s timeout,
-     * which kills the job outright and silently drops the check — this must be generous
-     * enough to cover the worst case instead.
+     * app:check-channels makes two separate yt-dlp calls (each individually capped by
+     * YtDlpWrapper/CheckChannelsForNewVideos at 90s + 240s) with the configurable
+     * ytdlp_delay_seconds sleep between them (up to 120s). Worst case that's 450s, so this
+     * needs comfortable margin above that instead of the queue worker's default 60s, which
+     * killed the job outright and silently dropped the check.
      */
-    public int $timeout = 300;
+    public int $timeout = 600;
 
     /**
      * Create a new job instance.

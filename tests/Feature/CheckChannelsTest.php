@@ -114,6 +114,7 @@ BASH;
             'name' => 'Timestamp Channel',
             'url' => 'https://www.youtube.com/@timestamp_channel',
             'download_quality' => '720p',
+            'cutoff_date' => '2020-01-01',
         ]);
 
         $publishedAt = Carbon::create(2026, 7, 13, 15, 30, 45, 'UTC');
@@ -145,6 +146,7 @@ BASH;
             'name' => 'No Timestamp Channel',
             'url' => 'https://www.youtube.com/@no_timestamp_channel',
             'download_quality' => '720p',
+            'cutoff_date' => '2020-01-01',
         ]);
 
         $videos = [[
