@@ -1,6 +1,7 @@
 @extends('layouts.app')
 
 @section('title', $channel->name)
+@section('header', 'Channel Details')
 
 @section('content')
     @if (session('status'))
