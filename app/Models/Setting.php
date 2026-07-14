@@ -60,6 +60,15 @@ class Setting extends Model
     }
 
     /**
+     * Whether the "Processes" page (background job/queue internals) is enabled. Off by
+     * default since it exposes low-level details most users won't need day to day.
+     */
+    public static function advancedModeEnabled(): bool
+    {
+        return self::get('advanced_mode', '0') === '1';
+    }
+
+    /**
      * Percentage of disk space used at $path (or storage_path() as a fallback, if $path
      * doesn't exist yet — e.g. a custom storage path that hasn't been created).
      */
