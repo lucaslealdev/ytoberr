@@ -128,6 +128,29 @@ class CheckChannelsTest extends TestCase
         $this->assertTrue($foundRegular, 'Nenhum dos vídeos regulares conhecidos do canal foi identificado e processado.');
     }
 
+    public function test_check_channels_logs_a_warning_when_a_channel_check_fails()
+    {
+        $channel = Channel::create([
+            'youtube_id' => 'UC_check_fail_chan',
+            'name' => 'Check Fail Channel',
+            'url' => 'https://example.com/checkfail',
+        ]);
+
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_check_fail.sh');
+        file_put_contents($mockYtDlp, '#!/bin/bash
+echo "ERROR: General Connection Error"
+exit 1
+');
+        chmod($mockYtDlp, 0755);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+
+        $this->assertDatabaseHas('warnings', ['source' => 'channel_check_failed']);
+
+        unlink($mockYtDlp);
+    }
+
     public function test_check_channels_sleeps_between_the_two_ytdlp_calls_for_the_same_channel()
     {
         // Each channel makes two separate yt-dlp processes (live_status precheck, then the

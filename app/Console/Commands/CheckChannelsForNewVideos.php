@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Channel;
 use App\Models\Setting;
 use App\Models\Video;
+use App\Models\Warning;
 use App\Services\YtDlpWrapper;
 use Carbon\Carbon;
 use Illuminate\Console\Attributes\Description;
@@ -116,7 +117,9 @@ class CheckChannelsForNewVideos extends Command
             }
 
             if ($processedCount === 0 && $resultCode !== 0) {
-                $this->error("Failed to check channel: {$channel->name}");
+                $message = "Failed to check channel: {$channel->name}";
+                $this->error($message);
+                Warning::log('channel_check_failed', $message, implode("\n", $output));
             }
         }
         $this->info('Done.');

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Jobs\UpdateToolsJob;
 use App\Models\Setting;
 use App\Models\Video;
+use App\Models\Warning;
 use App\Models\YtDlpCache;
 use App\Services\UpdateChecker;
 use Illuminate\Http\Request;
@@ -31,10 +32,11 @@ class SettingsController extends Controller
         $updateAvailable = $updateChecker->isNewer(config('app.version'), $latestVersion);
 
         $ytdlpDelaySeconds = Setting::ytdlpDelaySeconds();
+        $warnings = Warning::with('video')->latest()->get();
 
         return view('settings.index', compact(
             'ytDlpVersion', 'storagePath', 'cacheCount', 'queuedVideos', 'latestVersion', 'updateAvailable',
-            'ytdlpDelaySeconds'
+            'ytdlpDelaySeconds', 'warnings'
         ));
     }
 
@@ -145,5 +147,12 @@ class SettingsController extends Controller
         YtDlpCache::truncate();
 
         return back()->with('status', 'yt-dlp metadata cache cleared successfully!');
+    }
+
+    public function deleteWarning(Warning $warning)
+    {
+        $warning->delete();
+
+        return back()->with('status', 'Warning dismissed.');
     }
 }

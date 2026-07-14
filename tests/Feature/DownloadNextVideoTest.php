@@ -265,6 +265,41 @@ exit 1
         $this->assertEquals('failed', $v3->status);
         $this->assertEquals('failed', $v4->status);
         $this->assertStringContainsString('Queue suspended', $v4->last_error);
+        $this->assertDatabaseHas('warnings', ['source' => 'queue_suspended']);
+
+        unlink($mockYtDlp);
+    }
+
+    public function test_downloader_logs_a_warning_when_a_video_permanently_fails_after_max_retries()
+    {
+        $channel = Channel::create([
+            'youtube_id' => 'UC_test_chan',
+            'name' => 'Space Channel',
+            'url' => 'https://example.com/space',
+        ]);
+
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'retry_exhausted_vid',
+            'title' => 'Retry Exhausted Video',
+            'published_at' => now(),
+            'status' => 'pending',
+            'retries' => 2,
+        ]);
+
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_generic_error.sh');
+        file_put_contents($mockYtDlp, '#!/bin/bash
+echo "ERROR: General Connection Error"
+exit 1
+');
+        chmod($mockYtDlp, 0755);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('videos:download');
+
+        $video->refresh();
+        $this->assertEquals('failed', $video->status);
+        $this->assertDatabaseHas('warnings', ['source' => 'download_failed_permanently', 'video_id' => $video->id]);
 
         unlink($mockYtDlp);
     }
