@@ -4,25 +4,33 @@
 
 .PHONY: serve queue queue-bg queue-stop migrate cache-clear setup-bins
 
-## Setup binary dependencies (yt-dlp is architecture-independent; ffmpeg/ffprobe are fetched for the current CPU architecture)
+## Setup binary dependencies (yt-dlp is architecture-independent; ffmpeg/ffprobe/deno are fetched for the current CPU architecture)
 setup-bins:
 	mkdir -p bin
 	curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o bin/yt-dlp
 	chmod +x bin/yt-dlp
 	arch="$$(uname -m)"; \
 	case "$$arch" in \
-		x86_64) farch=amd64 ;; \
-		aarch64|arm64) farch=arm64 ;; \
-		armv7l|armv6l) farch=armhf ;; \
+		x86_64) farch=amd64; darch=x86_64-unknown-linux-gnu ;; \
+		aarch64|arm64) farch=arm64; darch=aarch64-unknown-linux-gnu ;; \
+		armv7l|armv6l) farch=armhf; darch="" ;; \
 		*) echo "Unsupported architecture for ffmpeg static build: $$arch" >&2; exit 1 ;; \
 	esac; \
-	curl -L "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-$${farch}-static.tar.xz" -o ffmpeg.tar.xz
-	mkdir -p bin/ffmpeg_temp
-	tar -xf ffmpeg.tar.xz -C bin/ffmpeg_temp --strip-components=1
-	mv bin/ffmpeg_temp/ffmpeg bin/ffmpeg
-	mv bin/ffmpeg_temp/ffprobe bin/ffprobe
-	chmod +x bin/ffmpeg bin/ffprobe
-	rm -rf bin/ffmpeg_temp ffmpeg.tar.xz
+	curl -L "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-$${farch}-static.tar.xz" -o ffmpeg.tar.xz; \
+	mkdir -p bin/ffmpeg_temp; \
+	tar -xf ffmpeg.tar.xz -C bin/ffmpeg_temp --strip-components=1; \
+	mv bin/ffmpeg_temp/ffmpeg bin/ffmpeg; \
+	mv bin/ffmpeg_temp/ffprobe bin/ffprobe; \
+	chmod +x bin/ffmpeg bin/ffprobe; \
+	rm -rf bin/ffmpeg_temp ffmpeg.tar.xz; \
+	if [ -n "$$darch" ]; then \
+		curl -L "https://github.com/denoland/deno/releases/latest/download/deno-$${darch}.zip" -o deno.zip; \
+		unzip -o deno.zip -d bin; \
+		chmod +x bin/deno; \
+		rm -f deno.zip; \
+	else \
+		echo "No deno build available for $$arch; yt-dlp will run without a JS runtime (some formats may be degraded/missing)." >&2; \
+	fi
 
 ## Run the queue worker
 queue:
