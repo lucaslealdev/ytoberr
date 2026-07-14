@@ -128,6 +128,37 @@ class CheckChannelsTest extends TestCase
         $this->assertTrue($foundRegular, 'Nenhum dos vídeos regulares conhecidos do canal foi identificado e processado.');
     }
 
+    public function test_check_channels_command_includes_shorts_when_channel_opts_in()
+    {
+        $channel = Channel::create([
+            'youtube_id' => 'UCLTWPE7XrHEe8m_xAmNbQ-Q',
+            'name' => 'ANCAPSU Shorts Enabled',
+            'url' => 'https://www.youtube.com/@ancap_su',
+            'download_quality' => '720p',
+            'cutoff_date' => '2020-01-01',
+            'download_shorts' => true,
+        ]);
+
+        Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+
+        $output = Artisan::output();
+
+        // Same known Shorts as test_check_channels_command_skips_youtube_shorts_for_ancapsu,
+        // but this time the channel opted in, so they must be queued instead of skipped.
+        $shortIds = ['gwgmZwB1adc', 'DE3LnuEJKB8', '9oBhMeK8Wo0', 'rgsRGgbDcYQ', '60fUrg1YiM4'];
+
+        $foundIncludedShort = false;
+        foreach ($shortIds as $shortId) {
+            if (str_contains($output, "New video found: {$shortId}")) {
+                $foundIncludedShort = true;
+                $this->assertDatabaseHas('videos', ['youtube_id' => $shortId]);
+            }
+        }
+
+        $this->assertTrue($foundIncludedShort, 'Nenhum Short foi incluído mesmo com download_shorts habilitado.');
+        $this->assertStringNotContainsString('YouTube Short', $output, 'Um Short foi pulado mesmo com download_shorts habilitado.');
+    }
+
     public function test_check_channels_logs_a_warning_when_a_channel_check_fails()
     {
         $channel = Channel::create([

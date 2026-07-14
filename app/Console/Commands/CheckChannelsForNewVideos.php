@@ -79,7 +79,7 @@ class CheckChannelsForNewVideos extends Command
                 $wasLive = $metadata['was_live'] ?? false;
                 $mediaType = $metadata['media_type'] ?? null;
 
-                if ($mediaType === 'short') {
+                if ($mediaType === 'short' && ! $channel->download_shorts) {
                     $this->info("Skipping video {$videoId}: YouTube Short.");
 
                     continue;
