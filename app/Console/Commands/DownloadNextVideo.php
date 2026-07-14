@@ -187,7 +187,7 @@ class DownloadNextVideo extends Command
     }
 
     /**
-     * Handle download failure (SponsorBlock, private/removed, cookies, retries, general queue suspensions)
+     * Handle download failure (private/removed, cookies, retries, general queue suspensions)
      */
     private function handleFailure(Video $video, string $errorOutput): void
     {
@@ -227,19 +227,7 @@ class DownloadNextVideo extends Command
             return;
         }
 
-        // 2. Check for SponsorBlock communication failures (Partial download recovery)
-        if (Str::contains($errorOutputLower, 'unable to communicate with sponsorblock')) {
-            Log::warning("SponsorBlock failure detected for {$video->youtube_id}. Retrying or completing as-is.");
-            // Under SponsorBlock failure, we can retry without sponsorblock or keep status as pending
-            $video->update([
-                'status' => 'pending',
-                'last_error' => 'SponsorBlock temporary communication error.',
-            ]);
-
-            return;
-        }
-
-        // 3. Check for Cookie/Authentication issues
+        // 2. Check for Cookie/Authentication issues
         $needsCookies = Str::contains($errorOutputLower, [
             'sign in to confirm',
             'confirm your age',
@@ -272,7 +260,7 @@ class DownloadNextVideo extends Command
             return;
         }
 
-        // 4. Handle Standard Retries
+        // 3. Handle Standard Retries
         if ($retries >= 3) {
             $video->update([
                 'status' => 'failed',
