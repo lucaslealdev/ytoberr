@@ -46,7 +46,7 @@ class SettingsControllerTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_index_renders_with_ytdlp_version_cache_count_and_queued_videos()
+    public function test_index_renders_with_ytdlp_version_and_cache_count()
     {
         $user = User::factory()->create();
 
@@ -63,44 +63,10 @@ class SettingsControllerTest extends TestCase
             'expires_at' => now()->addHour(),
         ]);
 
-        $channel = Channel::create([
-            'youtube_id' => 'UC_settings_chan',
-            'name' => 'Settings Test Channel',
-            'url' => 'https://example.com/settings',
-        ]);
-
-        $pendingVideo = Video::create([
-            'channel_id' => $channel->id,
-            'youtube_id' => 'settings_vid_pending',
-            'title' => 'Queued Pending Video',
-            'published_at' => now(),
-            'status' => 'pending',
-        ]);
-
-        $downloadingVideo = Video::create([
-            'channel_id' => $channel->id,
-            'youtube_id' => 'settings_vid_downloading',
-            'title' => 'Queued Downloading Video',
-            'published_at' => now(),
-            'status' => 'downloading',
-        ]);
-
-        // Completed videos are not part of the queue and must not show up.
-        Video::create([
-            'channel_id' => $channel->id,
-            'youtube_id' => 'settings_vid_completed',
-            'title' => 'Completed Video Not In Queue',
-            'published_at' => now(),
-            'status' => 'completed',
-        ]);
-
         $response = $this->actingAs($user)->get('/settings');
 
         $response->assertStatus(200);
         $response->assertSee($expectedVersion);
-        $response->assertSee($pendingVideo->title);
-        $response->assertSee($downloadingVideo->title);
-        $response->assertDontSee('Completed Video Not In Queue');
 
         $this->assertMatchesRegularExpression(
             '/Total cached yt-dlp metadata queries:.*?<span[^>]*>2<\/span>/s',

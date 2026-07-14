@@ -23,12 +23,6 @@ class SettingsController extends Controller
         $storagePath = Setting::getStoragePath();
         $cacheCount = YtDlpCache::count();
 
-        // Videos currently in queue (status is not completed)
-        $queuedVideos = Video::with('channel')
-            ->where('status', '!=', 'completed')
-            ->orderBy('created_at', 'desc')
-            ->get();
-
         $latestVersion = $updateChecker->latestVersion();
         $updateAvailable = $updateChecker->isNewer(config('app.version'), $latestVersion);
 
@@ -38,7 +32,7 @@ class SettingsController extends Controller
         $backupsList = $backups->list();
 
         return view('settings.index', compact(
-            'ytDlpVersion', 'storagePath', 'cacheCount', 'queuedVideos', 'latestVersion', 'updateAvailable',
+            'ytDlpVersion', 'storagePath', 'cacheCount', 'latestVersion', 'updateAvailable',
             'ytdlpDelaySeconds', 'advancedModeEnabled', 'warnings', 'backupsList'
         ));
     }
