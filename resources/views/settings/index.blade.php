@@ -92,6 +92,57 @@
             </div>
 
             <div class="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800">
+                <h3 class="text-lg font-semibold text-white mb-4">Backup &amp; Restore</h3>
+                <div class="space-y-4">
+                    <form action="{{ route('settings.backups.create') }}" method="POST">
+                        @csrf
+                        <button type="submit" class="bg-blue-600 text-white p-2 rounded hover:bg-blue-700">Create Backup</button>
+                    </form>
+
+                    @if ($backupsList->isNotEmpty())
+                        <ul class="divide-y divide-gray-800 text-sm">
+                            @foreach ($backupsList as $backup)
+                                <li class="py-2 flex items-center justify-between gap-2">
+                                    <div class="min-w-0">
+                                        <p class="text-gray-200 truncate" title="{{ $backup['name'] }}">{{ $backup['name'] }}</p>
+                                        <p class="text-gray-500 text-xs">{{ $backup['created_at']->diffForHumans() }} &middot; {{ number_format($backup['size'] / 1024, 1) }} KB</p>
+                                    </div>
+                                    <div class="flex items-center gap-2 flex-shrink-0">
+                                        <a href="{{ route('settings.backups.download', $backup['name']) }}" class="text-blue-400 hover:text-blue-300 text-xs">Download</a>
+                                        <form action="{{ route('settings.backups.restore', $backup['name']) }}" method="POST" onsubmit="return confirm('This will REPLACE the current database with this backup. This cannot be undone. Continue?');">
+                                            @csrf
+                                            <button type="submit" class="text-yellow-400 hover:text-yellow-300 text-xs">Restore</button>
+                                        </form>
+                                        <form action="{{ route('settings.backups.delete', $backup['name']) }}" method="POST" onsubmit="return confirm('Delete this backup?');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="text-red-400 hover:text-red-300 text-xs">Delete</button>
+                                        </form>
+                                    </div>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @else
+                        <p class="text-gray-500 text-sm italic">No backups yet.</p>
+                    @endif
+
+                    <div class="pt-4 border-t border-gray-800">
+                        <form action="{{ route('settings.backups.restore-upload') }}" method="POST" enctype="multipart/form-data" class="space-y-2" onsubmit="return confirm('This will REPLACE the current database with the uploaded file. This cannot be undone. Continue?');">
+                            @csrf
+                            <label class="block text-gray-400 text-sm mb-1">Restore from an uploaded backup file</label>
+                            <input type="file" name="backup_file" accept=".sqlite" class="w-full text-xs text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-gray-800 file:text-gray-200 file:text-xs hover:file:bg-gray-700" required>
+                            @error('backup_file')
+                                <p class="text-red-400 text-xs">{{ $message }}</p>
+                            @enderror
+                            <button type="submit" class="bg-yellow-700 text-white p-2 rounded hover:bg-yellow-800 text-sm">Upload &amp; Restore</button>
+                        </form>
+                    </div>
+
+                    <p class="text-xs text-gray-500">Backups only include the database (channels, video index, settings) — downloaded videos themselves are not included and should be backed up separately (e.g. by snapshotting the Docker volume).</p>
+                </div>
+            </div>
+
+            <div class="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800">
                 <h3 class="text-lg font-semibold text-white mb-4">About</h3>
                 <div class="text-gray-400 text-sm space-y-2">
                     <p>
