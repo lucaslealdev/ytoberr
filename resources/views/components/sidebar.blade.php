@@ -1,11 +1,11 @@
-<div id="sidebar" class="hidden md:block w-64 bg-gray-900 h-full p-4 fixed md:static z-50">
+<div id="sidebar" class="hidden md:flex md:flex-col w-64 bg-gray-900 h-full p-4 fixed md:static z-50">
     <div class="flex justify-between items-center mb-8">
         <a href="/" class="text-xl font-bold text-gray-100">Ytoberr</a>
         <button id="close-sidebar" class="md:hidden text-gray-400 hover:text-white" aria-label="Close menu">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
     </div>
-    <nav>
+    <nav class="md:flex-1">
         <ul class="space-y-2">
             <li>
                 <a href="/" class="block p-2 rounded border-l-4 {{ request()->is('/') ? 'border-blue-500 bg-gray-800 text-white' : 'border-transparent hover:bg-gray-800 text-gray-300 hover:text-gray-100' }}">🏠 Dashboard</a>
@@ -31,5 +31,15 @@
             </li>
         </ul>
     </nav>
+
+    <div class="mt-4 pt-4 border-t border-gray-800">
+        <div class="flex justify-between text-xs text-gray-400 mb-1">
+            <span>Disk usage</span>
+            <span>{{ $diskUsedPercent ?? 0 }}%</span>
+        </div>
+        <div class="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
+            <div class="h-2 rounded-full {{ $diskBarColor ?? 'bg-green-500' }}" style="width: {{ min(100, max(0, $diskUsedPercent ?? 0)) }}%"></div>
+        </div>
+    </div>
 </div>
 <div id="sidebar-overlay" class="hidden md:hidden fixed inset-0 bg-black bg-opacity-50 z-40"></div>

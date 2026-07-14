@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\Setting;
 use App\Models\Video;
 use App\Models\Warning;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -25,12 +26,17 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Share the pending download queue count and open warnings count with the sidebar
-        // so they're visible on every page without a per-request N+1.
+        // Share the pending download queue count, open warnings count, and disk usage
+        // with the sidebar so they're visible on every page without each controller
+        // needing to fetch them individually.
         View::composer('components.sidebar', function ($view) {
+            $diskUsedPercent = Setting::diskUsagePercent(Setting::getStoragePath());
+
             $view->with([
                 'pendingQueueCount' => Video::whereIn('status', ['pending', 'downloading'])->count(),
                 'warningsCount' => Warning::count(),
+                'diskUsedPercent' => $diskUsedPercent,
+                'diskBarColor' => Setting::diskUsageColorClass($diskUsedPercent),
             ]);
         });
 
