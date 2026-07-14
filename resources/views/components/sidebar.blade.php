@@ -29,6 +29,11 @@
                     </span>
                 </a>
             </li>
+            @if($advancedModeEnabled ?? false)
+                <li>
+                    <a href="/processes" class="block p-2 rounded border-l-4 {{ request()->is('processes*') ? 'border-blue-500 bg-gray-800 text-white' : 'border-transparent hover:bg-gray-800 text-gray-300 hover:text-gray-100' }}">🧩 Processes</a>
+                </li>
+            @endif
         </ul>
     </nav>
 

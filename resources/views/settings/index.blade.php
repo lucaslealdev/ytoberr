@@ -92,6 +92,18 @@
             </div>
 
             <div class="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800">
+                <h3 class="text-lg font-semibold text-white mb-4">Advanced Mode</h3>
+                <p class="text-xs text-gray-500 mb-4">Adds a "Processes" page to the sidebar showing what's running in the background right now (downloads, channel checks, and the raw Laravel queue), with controls to cancel, retry, or remove individual items.</p>
+                <form action="/settings/advanced-mode" method="POST">
+                    @csrf
+                    <label class="flex items-center gap-2 text-gray-300 text-sm">
+                        <input type="checkbox" name="advanced_mode" value="1" {{ $advancedModeEnabled ? 'checked' : '' }} onchange="this.form.submit()" class="rounded bg-gray-800 border-gray-700">
+                        Enable Advanced Mode
+                    </label>
+                </form>
+            </div>
+
+            <div class="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800">
                 <h3 class="text-lg font-semibold text-white mb-4">Backup &amp; Restore</h3>
                 <div class="space-y-4">
                     <form action="{{ route('settings.backups.create') }}" method="POST">

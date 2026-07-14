@@ -33,12 +33,13 @@ class SettingsController extends Controller
         $updateAvailable = $updateChecker->isNewer(config('app.version'), $latestVersion);
 
         $ytdlpDelaySeconds = Setting::ytdlpDelaySeconds();
+        $advancedModeEnabled = Setting::advancedModeEnabled();
         $warnings = Warning::with('video')->latest()->get();
         $backupsList = $backups->list();
 
         return view('settings.index', compact(
             'ytDlpVersion', 'storagePath', 'cacheCount', 'queuedVideos', 'latestVersion', 'updateAvailable',
-            'ytdlpDelaySeconds', 'warnings', 'backupsList'
+            'ytdlpDelaySeconds', 'advancedModeEnabled', 'warnings', 'backupsList'
         ));
     }
 
@@ -91,6 +92,13 @@ class SettingsController extends Controller
         Setting::set('ytdlp_delay_seconds', (string) $request->ytdlp_delay_seconds);
 
         return back()->with('status', 'yt-dlp request delay updated successfully!');
+    }
+
+    public function updateAdvancedMode(Request $request)
+    {
+        Setting::set('advanced_mode', $request->boolean('advanced_mode') ? '1' : '0');
+
+        return back()->with('status', 'Advanced mode updated successfully!');
     }
 
     public function checkMissingVideos()

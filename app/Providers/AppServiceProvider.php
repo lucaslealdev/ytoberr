@@ -37,6 +37,7 @@ class AppServiceProvider extends ServiceProvider
                 'warningsCount' => Warning::count(),
                 'diskUsedPercent' => $diskUsedPercent,
                 'diskBarColor' => Setting::diskUsageColorClass($diskUsedPercent),
+                'advancedModeEnabled' => Setting::advancedModeEnabled(),
             ]);
         });
 

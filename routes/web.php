@@ -5,8 +5,10 @@ use App\Http\Controllers\Auth\SetupController;
 use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MediaController;
+use App\Http\Controllers\ProcessesController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\VideoController;
+use App\Http\Middleware\EnsureAdvancedModeEnabled;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/setup', [SetupController::class, 'show']);
@@ -34,6 +36,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/settings/update-tools', [SettingsController::class, 'updateTools']);
     Route::post('/settings/storage-path', [SettingsController::class, 'updateStoragePath']);
     Route::post('/settings/ytdlp-delay', [SettingsController::class, 'updateYtdlpDelay']);
+    Route::post('/settings/advanced-mode', [SettingsController::class, 'updateAdvancedMode']);
     Route::get('/settings/check-missing-videos', [SettingsController::class, 'checkMissingVideos']);
     Route::post('/settings/clean-missing-videos', [SettingsController::class, 'cleanMissingVideos']);
     Route::post('/settings/reset-cache', [SettingsController::class, 'resetCache']);
@@ -43,4 +46,12 @@ Route::middleware('auth')->group(function () {
     Route::delete('/settings/backups/{filename}', [SettingsController::class, 'deleteBackup'])->where('filename', '.*')->name('settings.backups.delete');
     Route::post('/settings/backups/{filename}/restore', [SettingsController::class, 'restoreBackup'])->where('filename', '.*')->name('settings.backups.restore');
     Route::post('/settings/backups/restore-upload', [SettingsController::class, 'restoreBackupUpload'])->name('settings.backups.restore-upload');
+
+    Route::middleware(EnsureAdvancedModeEnabled::class)->group(function () {
+        Route::get('/processes', [ProcessesController::class, 'index'])->name('processes.index');
+        Route::delete('/processes/videos/{video}', [ProcessesController::class, 'destroyVideo'])->name('processes.videos.destroy');
+        Route::delete('/processes/jobs/{id}', [ProcessesController::class, 'destroyJob'])->name('processes.jobs.destroy');
+        Route::post('/processes/failed-jobs/{uuid}/retry', [ProcessesController::class, 'retryFailedJob'])->name('processes.failed-jobs.retry');
+        Route::delete('/processes/failed-jobs/{uuid}', [ProcessesController::class, 'destroyFailedJob'])->name('processes.failed-jobs.destroy');
+    });
 });
