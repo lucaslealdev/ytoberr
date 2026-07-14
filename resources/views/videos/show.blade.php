@@ -50,7 +50,7 @@
                         </a>
                         <span>&bull;</span>
                     @endif
-                    <span>{{ $video->published_at ? \Carbon\Carbon::parse($video->published_at)->format('M d, Y \a\t g:i A') : 'Unknown date' }}</span>
+                    <span>{{ $video->publishedAtLocal()?->format('M d, Y \a\t g:i A') ?? 'Unknown date' }}</span>
                     @if ($video->formattedDuration())
                         <span>&bull;</span>
                         <span>{{ $video->formattedDuration() }}</span>
@@ -64,18 +64,18 @@
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm border-t border-gray-800 pt-4">
                     <div>
                         <p class="text-gray-500 text-xs uppercase tracking-wide mb-1">Published</p>
-                        @if ($video->published_at)
-                            <p class="text-gray-200">{{ \Carbon\Carbon::parse($video->published_at)->format('M d, Y') }}</p>
-                            <p class="text-gray-500 text-xs">{{ \Carbon\Carbon::parse($video->published_at)->format('g:i A') }}</p>
+                        @if ($video->publishedAtLocal())
+                            <p class="text-gray-200">{{ $video->publishedAtLocal()->format('M d, Y') }}</p>
+                            <p class="text-gray-500 text-xs">{{ $video->publishedAtLocal()->format('g:i A') }}</p>
                         @else
                             <p class="text-gray-500">&mdash;</p>
                         @endif
                     </div>
                     <div>
                         <p class="text-gray-500 text-xs uppercase tracking-wide mb-1">Downloaded</p>
-                        @if ($video->downloaded_at)
-                            <p class="text-gray-200">{{ \Carbon\Carbon::parse($video->downloaded_at)->format('M d, Y') }}</p>
-                            <p class="text-gray-500 text-xs">{{ \Carbon\Carbon::parse($video->downloaded_at)->format('g:i A') }}</p>
+                        @if ($video->downloadedAtLocal())
+                            <p class="text-gray-200">{{ $video->downloadedAtLocal()->format('M d, Y') }}</p>
+                            <p class="text-gray-500 text-xs">{{ $video->downloadedAtLocal()->format('g:i A') }}</p>
                         @else
                             <p class="text-gray-500">&mdash;</p>
                         @endif
