@@ -48,16 +48,17 @@ LABEL org.opencontainers.image.title="Ytoberr" \
       org.opencontainers.image.licenses="MIT"
 
 # System packages:
-#   bash/curl/tar/xz  -> needed by `make setup-bins` to fetch yt-dlp/ffmpeg at startup
-#   python3           -> yt-dlp ships as a python zipapp
-#   make              -> reuses the project's Makefile (setup-bins target)
-#   supervisor        -> supervises the web server, queue worker and cron in a single container
-#   sqlite-libs       -> SQLite runtime (with FTS5) used by pdo_sqlite
+#   bash/curl/tar/xz/unzip -> needed by `make setup-bins` to fetch yt-dlp/ffmpeg/deno at startup
+#   python3                -> yt-dlp ships as a python zipapp
+#   make                   -> reuses the project's Makefile (setup-bins target)
+#   supervisor             -> supervises the web server, queue worker and cron in a single container
+#   sqlite-libs            -> SQLite runtime (with FTS5) used by pdo_sqlite
 RUN apk add --no-cache \
         bash \
         curl \
         tar \
         xz \
+        unzip \
         python3 \
         make \
         ca-certificates \
