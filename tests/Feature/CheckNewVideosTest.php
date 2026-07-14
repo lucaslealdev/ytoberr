@@ -23,8 +23,10 @@ class CheckNewVideosTest extends TestCase
     }
 
     /**
-     * Create a fake yt-dlp executable that answers both calls app:check-channels makes:
-     * the live_status precheck (--print-to-file) and the video listing (-j).
+     * Create a fake yt-dlp executable that answers all three calls app:check-channels makes:
+     * the live_status precheck (--print-to-file), the flat-playlist listing (--flat-playlist
+     * -j), and the full per-video extraction (-j against a single watch URL — replies with
+     * just that video's JSON line, found by matching the "v=" id in the URL).
      *
      * @param  array<int, array<string, mixed>>  $videos
      */
@@ -49,9 +51,19 @@ if [[ "$*" == *"--print-to-file"* ]]; then
     done
 fi
 
-cat <<'VIDEOS'
+VIDEOS_JSON=$(cat <<'VIDEOSEOF'
 __VIDEOS__
-VIDEOS
+VIDEOSEOF
+)
+
+if [[ "$*" == *"--flat-playlist"* ]]; then
+    echo "$VIDEOS_JSON"
+    exit 0
+fi
+
+last_arg="${@: -1}"
+video_id=$(echo "$last_arg" | grep -oP '(?<=v=)[^&]+')
+echo "$VIDEOS_JSON" | grep -F "\"id\":\"$video_id\""
 exit 0
 BASH;
 

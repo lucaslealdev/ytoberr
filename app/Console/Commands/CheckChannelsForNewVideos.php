@@ -60,20 +60,68 @@ class CheckChannelsForNewVideos extends Command
                 Sleep::for($delay)->seconds();
             }
 
-            // 2. Fetch new videos (IDs)
-            // Use --ignore-errors and -j to get metadata of the last 10 videos including 'was_live'
-            $sleepArgs = $delay > 0 ? "--sleep-requests {$delay} " : '';
-            $command = escapeshellarg($ytDlp).' --ignore-errors -j '.$sleepArgs.'--playlist-items :10 '.escapeshellarg($channel->url).' 2>&1';
+            // 2. List the last 10 video IDs via a cheap flat-playlist listing. Unlike a full
+            // dump, this doesn't visit each video's watch page (no JS signature solving, no
+            // format list), so it's a single lightweight request regardless of how many of
+            // those videos are already known.
+            $command = escapeshellarg($ytDlp).' --ignore-errors --flat-playlist -j --playlist-items :10 '.escapeshellarg($channel->url).' 2>&1';
             [$output, $resultCode] = $wrapper->runCommand($command, 240);
 
-            $processedCount = 0;
+            $candidateIds = [];
             foreach ($output as $jsonLine) {
-                $metadata = json_decode($jsonLine, true);
-                if (! $metadata) {
+                $entry = json_decode($jsonLine, true);
+                if (! $entry || empty($entry['id'])) {
                     continue; // Skip warnings, errors, or plain text log lines
                 }
+                $candidateIds[] = $entry['id'];
+            }
 
-                $videoId = $metadata['id'] ?? null;
+            if (empty($candidateIds) && $resultCode !== 0) {
+                $message = "Failed to check channel: {$channel->name}";
+                $this->error($message);
+                Warning::log('channel_check_failed', $message, implode("\n", $output));
+
+                continue;
+            }
+
+            $newVideoIds = array_filter(
+                $candidateIds,
+                fn (string $videoId) => ! Video::where('youtube_id', $videoId)->exists()
+            );
+
+            // 3. Only genuinely new videos need the expensive full extraction (was_live,
+            // media_type, exact publish timestamp) — already-known videos are skipped before
+            // ever paying that cost.
+            $sleepArgs = $delay > 0 ? "--sleep-requests {$delay} " : '';
+            foreach ($newVideoIds as $videoId) {
+                // Same reasoning as the other inter-request sleeps: each of these is its own
+                // yt-dlp process, separate from the flat-playlist listing call above and from
+                // each other.
+                if ($delay > 0) {
+                    Sleep::for($delay)->seconds();
+                }
+
+                $videoUrl = "https://www.youtube.com/watch?v={$videoId}";
+                $command = escapeshellarg($ytDlp).' --ignore-errors -j '.$sleepArgs.escapeshellarg($videoUrl).' 2>&1';
+                [$output, $resultCode] = $wrapper->runCommand($command, 240);
+
+                $metadata = null;
+                foreach ($output as $jsonLine) {
+                    $decoded = json_decode($jsonLine, true);
+                    if ($decoded) {
+                        $metadata = $decoded;
+
+                        break;
+                    }
+                }
+
+                if (! $metadata) {
+                    $this->error("Failed to fetch metadata for video: {$videoId}");
+                    Warning::log('video_check_failed', "Failed to fetch metadata for video: {$videoId}", implode("\n", $output));
+
+                    continue;
+                }
+
                 $wasLive = $metadata['was_live'] ?? false;
                 $mediaType = $metadata['media_type'] ?? null;
 
@@ -106,25 +154,16 @@ class CheckChannelsForNewVideos extends Command
                     continue;
                 }
 
-                if (! empty($videoId) && ! Video::where('youtube_id', $videoId)->exists()) {
-                    $this->info("New video found: {$videoId}. Adding to database download queue.");
-                    Video::create([
-                        'channel_id' => $channel->id,
-                        'youtube_id' => $videoId,
-                        'title' => $metadata['title'] ?? 'Unknown Title',
-                        'description' => $metadata['description'] ?? null,
-                        'published_at' => $publishedAt->toDateTimeString(),
-                        'duration' => $metadata['duration'] ?? null,
-                        'status' => 'pending',
-                    ]);
-                }
-                $processedCount++;
-            }
-
-            if ($processedCount === 0 && $resultCode !== 0) {
-                $message = "Failed to check channel: {$channel->name}";
-                $this->error($message);
-                Warning::log('channel_check_failed', $message, implode("\n", $output));
+                $this->info("New video found: {$videoId}. Adding to database download queue.");
+                Video::create([
+                    'channel_id' => $channel->id,
+                    'youtube_id' => $videoId,
+                    'title' => $metadata['title'] ?? 'Unknown Title',
+                    'description' => $metadata['description'] ?? null,
+                    'published_at' => $publishedAt->toDateTimeString(),
+                    'duration' => $metadata['duration'] ?? null,
+                    'status' => 'pending',
+                ]);
             }
         }
         $this->info('Done.');
