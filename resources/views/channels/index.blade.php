@@ -66,9 +66,13 @@
                     $coverUrl = asset('storage/' . $fanartPath);
                 }
             @endphp
-            <div class="relative overflow-hidden bg-gray-900 p-4 rounded shadow flex justify-between items-center border border-gray-800 hover:border-gray-700 transition duration-200">
+            {{-- overflow-hidden/rounding lives on the cover wrapper (not the card itself) so the
+                 kebab dropdown below isn't clipped when it overflows past the card's height. --}}
+            <div data-channel-card class="relative bg-gray-900 p-4 rounded shadow flex justify-between items-center border border-gray-800 hover:border-gray-700 transition duration-200">
                 @if ($coverUrl)
-                    <div class="absolute inset-0 bg-cover bg-center opacity-10 pointer-events-none" style="background-image: url('{{ $coverUrl }}');"></div>
+                    <div class="absolute inset-0 rounded overflow-hidden pointer-events-none">
+                        <div class="absolute inset-0 bg-cover bg-center opacity-10" style="background-image: url('{{ $coverUrl }}');"></div>
+                    </div>
                 @endif
                 <div class="flex items-center gap-4 relative z-10">
                     <a href="/channels/{{ $channel->id }}" class="hover:opacity-80 transition duration-200">
@@ -83,12 +87,18 @@
                             <h3 class="font-bold text-lg text-white">{{ $channel->name }}</h3>
                         </a>
                         <p class="text-sm text-gray-500 mt-1">
-                            {{ $channel->download_quality ?? '720p' }}
+                            <span class="channel-quality-label">{{ $channel->download_quality ?? '720p' }}</span>
                             <span class="mx-1">&middot;</span>
                             {{ \Illuminate\Support\Number::fileSize($channel->totalDownloadedBytes(), precision: 1) }}
                         </p>
                     </div>
                 </div>
+
+                {{-- No z-index wrapper here: the dropdown inside needs to rank against the
+                     whole page's stacking order, not get trapped in a per-card context tied
+                     to every other card's identical z-index (which DOM order would then
+                     resolve in favor of later cards, clipping this one's open dropdown). --}}
+                @include('channels._channel-actions', ['channel' => $channel])
             </div>
         @empty
             <div class="col-span-full p-8 bg-gray-900 rounded-lg text-center text-gray-400">
@@ -98,4 +108,6 @@
     </div>
 
     {{ $channels->links('components.pagination') }}
+
+    @include('channels._channel-modals')
 @endsection

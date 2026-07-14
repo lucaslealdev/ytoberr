@@ -179,6 +179,13 @@ class ChannelController extends Controller
             'download_shorts' => $request->boolean('download_shorts'),
         ]);
 
+        if ($request->wantsJson()) {
+            return response()->json([
+                'message' => 'Channel settings updated successfully!',
+                'channel' => $channel->only(['id', 'cutoff_date', 'download_quality', 'download_shorts']),
+            ]);
+        }
+
         return back()->with('status', 'Channel settings updated successfully!');
     }
 
