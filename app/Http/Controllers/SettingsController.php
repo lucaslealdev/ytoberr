@@ -16,7 +16,7 @@ class SettingsController extends Controller
 {
     public function index(UpdateChecker $updateChecker, BackupService $backups)
     {
-        $ytDlp = base_path('bin/yt-dlp');
+        $ytDlp = config('services.ytdlp_path', base_path('bin/yt-dlp'));
 
         $ytDlpVersion = shell_exec(escapeshellarg($ytDlp).' --version');
 
