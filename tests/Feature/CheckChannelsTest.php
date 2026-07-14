@@ -139,6 +139,35 @@ BASH;
         unlink($mockYtDlp);
     }
 
+    public function test_check_channels_captures_the_video_duration_from_ytdlp()
+    {
+        $channel = Channel::create([
+            'youtube_id' => 'UC_duration_chan',
+            'name' => 'Duration Channel',
+            'url' => 'https://www.youtube.com/@duration_channel',
+            'cutoff_date' => '2020-01-01',
+        ]);
+
+        $videos = [[
+            'id' => 'duration_vid',
+            'title' => 'Duration Video',
+            'upload_date' => '20260713',
+            'duration' => 754,
+            'was_live' => false,
+            'media_type' => null,
+        ]];
+
+        $mockYtDlp = $this->mockYtDlpWithVideos('duration_channel', $videos);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+
+        $video = Video::where('youtube_id', 'duration_vid')->firstOrFail();
+        $this->assertEquals(754, $video->duration);
+
+        unlink($mockYtDlp);
+    }
+
     public function test_check_channels_falls_back_to_midnight_when_ytdlp_omits_the_timestamp_field()
     {
         $channel = Channel::create([

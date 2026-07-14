@@ -114,6 +114,7 @@ class CheckChannelsForNewVideos extends Command
                         'title' => $metadata['title'] ?? 'Unknown Title',
                         'description' => $metadata['description'] ?? null,
                         'published_at' => $publishedAt->toDateTimeString(),
+                        'duration' => $metadata['duration'] ?? null,
                         'status' => 'pending',
                     ]);
                 }

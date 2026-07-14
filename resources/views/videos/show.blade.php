@@ -50,11 +50,49 @@
                         </a>
                         <span>&bull;</span>
                     @endif
-                    <span>{{ $video->published_at ? \Carbon\Carbon::parse($video->published_at)->format('M d, Y') : 'Unknown date' }}</span>
+                    <span>{{ $video->published_at ? \Carbon\Carbon::parse($video->published_at)->format('M d, Y \a\t g:i A') : 'Unknown date' }}</span>
+                    @if ($video->formattedDuration())
+                        <span>&bull;</span>
+                        <span>{{ $video->formattedDuration() }}</span>
+                    @endif
                 </div>
                 @if ($video->description)
-                    <p class="text-gray-300 text-sm whitespace-pre-line leading-relaxed">{{ $video->description }}</p>
+                    <p class="text-gray-300 text-sm whitespace-pre-line leading-relaxed mb-4">{{ $video->description }}</p>
                 @endif
+
+                <!-- Details -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm border-t border-gray-800 pt-4">
+                    <div>
+                        <p class="text-gray-500 text-xs uppercase tracking-wide mb-1">Published</p>
+                        @if ($video->published_at)
+                            <p class="text-gray-200">{{ \Carbon\Carbon::parse($video->published_at)->format('M d, Y') }}</p>
+                            <p class="text-gray-500 text-xs">{{ \Carbon\Carbon::parse($video->published_at)->format('g:i A') }}</p>
+                        @else
+                            <p class="text-gray-500">&mdash;</p>
+                        @endif
+                    </div>
+                    <div>
+                        <p class="text-gray-500 text-xs uppercase tracking-wide mb-1">Downloaded</p>
+                        @if ($video->downloaded_at)
+                            <p class="text-gray-200">{{ \Carbon\Carbon::parse($video->downloaded_at)->format('M d, Y') }}</p>
+                            <p class="text-gray-500 text-xs">{{ \Carbon\Carbon::parse($video->downloaded_at)->format('g:i A') }}</p>
+                        @else
+                            <p class="text-gray-500">&mdash;</p>
+                        @endif
+                    </div>
+                    <div>
+                        <p class="text-gray-500 text-xs uppercase tracking-wide mb-1">Duration</p>
+                        <p class="text-gray-200">{{ $video->formattedDuration() ?? '—' }}</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 text-xs uppercase tracking-wide mb-1">File Size</p>
+                        <p class="text-gray-200">{{ $video->fileSize() ? \Illuminate\Support\Number::fileSize($video->fileSize(), precision: 1) : '—' }}</p>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-gray-800">
+                    <a href="https://www.youtube.com/watch?v={{ $video->youtube_id }}" target="_blank" rel="noopener" class="text-blue-400 hover:text-blue-300 text-xs underline">View on YouTube ↗</a>
+                </div>
             </div>
 
             <!-- More from this channel: stays in the main column, below the description -->
