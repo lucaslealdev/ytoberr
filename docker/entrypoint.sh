@@ -23,8 +23,8 @@ mkdir -p \
 # Recreate the public disk symlink in case /var/www/html/public was replaced by a volume mount.
 ln -sfn /var/www/html/storage/app/public /var/www/html/public/storage
 
-if [ ! -x bin/yt-dlp ] || [ ! -x bin/ffmpeg ] || [ ! -x bin/ffprobe ] || [ ! -x bin/deno ]; then
-    echo "[entrypoint] yt-dlp/ffmpeg/ffprobe/deno missing from bin/, downloading via 'make setup-bins'..."
+if [ ! -x bin/yt-dlp ] || [ ! -x bin/ffmpeg ] || [ ! -x bin/ffprobe ]; then
+    echo "[entrypoint] yt-dlp/ffmpeg/ffprobe missing from bin/, downloading via 'make setup-bins'..."
     make setup-bins
 fi
 

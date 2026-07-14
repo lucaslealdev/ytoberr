@@ -23,13 +23,15 @@ setup-bins:
 	mv bin/ffmpeg_temp/ffprobe bin/ffprobe; \
 	chmod +x bin/ffmpeg bin/ffprobe; \
 	rm -rf bin/ffmpeg_temp ffmpeg.tar.xz; \
-	if [ -n "$$darch" ]; then \
+	if [ -z "$$darch" ]; then \
+		echo "No deno build available for $$arch; yt-dlp needs a JS runtime (deno or Node.js >= 22) on PATH for reliable extraction." >&2; \
+	elif ldd --version 2>&1 | grep -qi musl; then \
+		echo "musl libc detected (e.g. Alpine): deno's official build is glibc-only and won't run here. Install Node.js >= 22 instead (yt-dlp uses it automatically once >= 22) -- the Docker image already bundles one." >&2; \
+	else \
 		curl -L "https://github.com/denoland/deno/releases/latest/download/deno-$${darch}.zip" -o deno.zip; \
 		unzip -o deno.zip -d bin; \
 		chmod +x bin/deno; \
 		rm -f deno.zip; \
-	else \
-		echo "No deno build available for $$arch; yt-dlp will run without a JS runtime (some formats may be degraded/missing)." >&2; \
 	fi
 
 ## Run the queue worker

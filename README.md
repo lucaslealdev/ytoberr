@@ -13,7 +13,7 @@ Self-hosted web dashboard for local archiving and automated monitoring of YouTub
 
 - **Backend:** Laravel 13.x (PHP 8.4)
 - **Database:** SQLite
-- **Download:** `yt-dlp` (`ffmpeg` is only used internally by yt-dlp to merge separate audio/video formats; the application never invokes ffmpeg directly). `deno` is also fetched as yt-dlp's JavaScript runtime, required to reliably resolve YouTube's signature challenges — without it, some videos fail to download or only degraded formats are available.
+- **Download:** `yt-dlp` (`ffmpeg` is only used internally by yt-dlp to merge separate audio/video formats; the application never invokes ffmpeg directly). yt-dlp also needs a JavaScript runtime to reliably resolve YouTube's signature challenges — without one, some videos fail to download or only degraded formats are available. The Docker image bundles Node.js >= 22 for this; `make setup-bins` additionally fetches `deno` for non-Docker installs on glibc-based Linux (deno's official build doesn't support musl systems like Alpine, so it's skipped there automatically — install Node.js >= 22 yourself in that case).
 
 ## ⚙️ Installation
 
@@ -22,13 +22,13 @@ Self-hosted web dashboard for local archiving and automated monitoring of YouTub
 3. Configure the `.env` file (based on `.env.example`).
 4. Run migrations: `php artisan migrate`.
 5. Process pending one-time data migrations: `php artisan operations:process`.
-6. Download and set up the binary dependencies (`yt-dlp`, `ffmpeg`, `ffprobe`, `deno`): `make setup-bins`.
+6. Download and set up the binary dependencies (`yt-dlp`, `ffmpeg`, `ffprobe`, and `deno` on compatible systems): `make setup-bins`.
 
 ## 🖥️ Development Commands (Makefile)
 
 The project includes a `Makefile` with useful shortcuts:
 
-- `make setup-bins`: Downloads and sets up the binary dependencies (`yt-dlp`, `ffmpeg`, `ffprobe`, `deno`) into the `bin/` folder.
+- `make setup-bins`: Downloads and sets up the binary dependencies (`yt-dlp`, `ffmpeg`, `ffprobe`, and `deno` on glibc-based systems) into the `bin/` folder.
 - `make serve`: Starts the development server.
 - `make queue-bg`: Starts the queue worker in the background.
 - `make queue-stop`: Stops the queue worker.
@@ -37,7 +37,7 @@ The project includes a `Makefile` with useful shortcuts:
 
 ## 🐳 Docker (Recommended)
 
-The simplest way to install and run Ytoberr is via Docker. The image already includes the Laravel scheduler's cron, the queue worker, and automatically downloads `yt-dlp`/`ffmpeg`/`ffprobe`/`deno` on first run, in addition to running migrations automatically.
+The simplest way to install and run Ytoberr is via Docker. The image already includes the Laravel scheduler's cron, the queue worker, a bundled Node.js runtime (yt-dlp's JavaScript engine — see Tech Stack above), and automatically downloads `yt-dlp`/`ffmpeg`/`ffprobe` on first run, in addition to running migrations automatically.
 
 A ready-to-use image (multi-architecture, `amd64`/`arm64`) is automatically published to the GitHub Container Registry on every push to `main` (tag `latest`) and on every `vX.Y.Z` release (version tags), via [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml). To use it without cloning the repository, simply:
 
@@ -59,7 +59,7 @@ The application comes up at `http://localhost:8080` (adjustable via `APP_PORT`/`
 Persistent data (defined in `docker-compose.yml`):
 
 - `ytoberr-storage` (named volume): SQLite database (`storage/app/database.sqlite`), videos, thumbnails, and other generated files (`storage/app`). It's all in a single purpose-built volume because SQLite lives inside `storage/app` — there's no separate volume for the database.
-- `./bin` (bind mount to the project's `bin/` folder): if `yt-dlp`/`ffmpeg`/`ffprobe`/`deno` already exist there (e.g., from a previous local `make setup-bins`), the container reuses them directly without downloading anything. If any of them is missing, the container downloads all the binaries automatically and keeps them there for future startups.
+- `./bin` (bind mount to the project's `bin/` folder): if `yt-dlp`/`ffmpeg`/`ffprobe` already exist there (e.g., from a previous local `make setup-bins`), the container reuses them directly without downloading anything. If any of them is missing, the container downloads all three automatically and keeps them there for future startups. Node.js (yt-dlp's JS runtime) is bundled in the image itself rather than fetched here, since deno — what `make setup-bins` fetches on non-Docker installs — doesn't run on this image's musl-based Alpine base.
 
 Useful variables (can be set in a `.env` next to `docker-compose.yml` or exported in the shell):
 
