@@ -11,6 +11,8 @@ use Illuminate\Support\Str;
 
 class ChannelService
 {
+    public function __construct(private YtDlpWrapper $ytDlpWrapper) {}
+
     /**
      * Download and store channel images (avatar, banner, fanart)
      * using yt-dlp based on Pinchflat's strategy.
@@ -33,7 +35,7 @@ class ChannelService
         // --write-info-json saves metadata to a .info.json file
         $command = "{$ytDlp} --skip-download --no-playlist --playlist-items 0 --write-all-thumbnails --convert-thumbnails jpg --write-info-json {$sleepArgs}--output ".escapeshellarg($outputPath).' '.escapeshellarg($channel->url).' 2>&1';
 
-        exec($command, $output, $resultCode);
+        [$output, $resultCode] = $this->ytDlpWrapper->runCommand($command, 90);
 
         if ($resultCode !== 0) {
             $message = "Failed to fetch channel images for {$channel->name} ({$channel->url}).";

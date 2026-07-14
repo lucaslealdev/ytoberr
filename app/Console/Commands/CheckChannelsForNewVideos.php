@@ -61,12 +61,10 @@ class CheckChannelsForNewVideos extends Command
             }
 
             // 2. Fetch new videos (IDs)
-            $output = [];
-            $resultCode = 0;
             // Use --ignore-errors and -j to get metadata of the last 10 videos including 'was_live'
             $sleepArgs = $delay > 0 ? "--sleep-requests {$delay} " : '';
             $command = escapeshellarg($ytDlp).' --ignore-errors -j '.$sleepArgs.'--playlist-items :10 '.escapeshellarg($channel->url).' 2>&1';
-            exec($command, $output, $resultCode);
+            [$output, $resultCode] = $wrapper->runCommand($command, 240);
 
             $processedCount = 0;
             foreach ($output as $jsonLine) {
