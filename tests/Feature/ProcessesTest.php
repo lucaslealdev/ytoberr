@@ -95,6 +95,15 @@ class ProcessesTest extends TestCase
             'last_error' => 'Something went wrong.',
         ]);
 
+        // Completed videos aren't part of any queue and must not show up here.
+        Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'processes_completed_vid',
+            'title' => 'Completed Video Not In Queue',
+            'published_at' => now(),
+            'status' => 'completed',
+        ]);
+
         $response = $this->actingAs($user)->get('/processes');
 
         $response->assertStatus(200);
@@ -102,6 +111,7 @@ class ProcessesTest extends TestCase
         $response->assertSee('Pending Video');
         $response->assertSee('Failed Video');
         $response->assertSee('Something went wrong.');
+        $response->assertDontSee('Completed Video Not In Queue');
     }
 
     public function test_processes_page_lists_a_queued_channel_check_job_with_its_channel_name()

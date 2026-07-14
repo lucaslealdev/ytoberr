@@ -50,6 +50,7 @@
                         <tr class="border-b border-gray-800 text-gray-400 font-medium text-xs uppercase tracking-wider">
                             <th class="pb-3 pr-4">Video</th>
                             <th class="pb-3 px-4">Channel</th>
+                            <th class="pb-3 px-4 text-center">Retries</th>
                             <th class="pb-3 px-4">Queued At</th>
                             <th class="pb-3 pl-4">Actions</th>
                         </tr>
@@ -59,6 +60,7 @@
                             <tr>
                                 <td class="py-3 pr-4 max-w-xs truncate font-semibold text-gray-100" title="{{ $video->title }}">{{ $video->title }}</td>
                                 <td class="py-3 px-4 text-gray-400">{{ $video->channel->name ?? 'Unknown' }}</td>
+                                <td class="py-3 px-4 text-center font-mono">{{ $video->retries }} / 3</td>
                                 <td class="py-3 px-4 text-gray-500 text-xs">{{ $video->created_at->diffForHumans() }}</td>
                                 <td class="py-3 pl-4">
                                     <form action="{{ route('processes.videos.destroy', $video) }}" method="POST" onsubmit="return confirm('Remove this video from the queue?');">
@@ -93,7 +95,8 @@
                         <tr class="border-b border-gray-800 text-gray-400 font-medium text-xs uppercase tracking-wider">
                             <th class="pb-3 pr-4">Video</th>
                             <th class="pb-3 px-4">Channel</th>
-                            <th class="pb-3 px-4">Last Error</th>
+                            <th class="pb-3 px-4 text-center">Retries</th>
+                            <th class="pb-3 px-4">Details / Errors</th>
                             <th class="pb-3 pl-4">Actions</th>
                         </tr>
                     </thead>
@@ -102,7 +105,16 @@
                             <tr>
                                 <td class="py-3 pr-4 max-w-xs truncate font-semibold text-gray-100" title="{{ $video->title }}">{{ $video->title }}</td>
                                 <td class="py-3 px-4 text-gray-400">{{ $video->channel->name ?? 'Unknown' }}</td>
-                                <td class="py-3 px-4 text-red-400 text-xs max-w-sm truncate" title="{{ $video->last_error }}">{{ $video->last_error ?? '—' }}</td>
+                                <td class="py-3 px-4 text-center font-mono">{{ $video->retries }} / 3</td>
+                                <td class="py-3 px-4 text-xs max-w-sm">
+                                    @if ($video->last_error)
+                                        <span class="text-red-400 line-clamp-1 italic" title="{{ $video->last_error }}">{{ $video->last_error }}</span>
+                                    @elseif ($video->prevent_download)
+                                        <span class="text-yellow-500 italic">Prevented: {{ $video->unavailable_reason ?? 'Excluded' }}</span>
+                                    @else
+                                        <span class="text-gray-500 italic">No errors logged</span>
+                                    @endif
+                                </td>
                                 <td class="py-3 pl-4">
                                     <div class="flex items-center gap-3">
                                         <form action="{{ route('videos.retry', $video) }}" method="POST">
