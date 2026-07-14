@@ -270,6 +270,60 @@ exit 1
         unlink($mockYtDlp);
     }
 
+    public function test_downloader_logs_a_warning_and_fails_the_video_when_copy_fails()
+    {
+        // Regression test: a copy() failure (disk full, permissions, ...) must not leave the
+        // video silently marked "completed" — it must fail visibly and log a Warning.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_copy_fail_chan',
+            'name' => 'Copy Fail Channel',
+            'url' => 'https://example.com/copyfail',
+        ]);
+
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'copy_fail_vid',
+            'title' => 'Copy Fail Video',
+            'published_at' => '2026-07-10 12:00:00',
+            'status' => 'pending',
+        ]);
+
+        // Pre-create the target directory read-only so copy() into it fails with a
+        // permission error, without needing to actually fill up the disk.
+        $downloadsDir = Setting::getStoragePath();
+        $targetDir = $downloadsDir.'/Copy Fail Channel/Season 2026';
+        mkdir($targetDir, 0755, true);
+        chmod($targetDir, 0555);
+
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_copyfail.sh');
+        file_put_contents($mockYtDlp, <<<'BASH'
+#!/bin/bash
+for arg in "$@"; do
+    if [[ $arg == *video.* ]]; then
+        out_dir=$(dirname "$arg")
+        mkdir -p "$out_dir"
+        echo "dummy video" > "$out_dir/video.mp4"
+        exit 0
+    fi
+done
+exit 1
+BASH);
+        chmod($mockYtDlp, 0755);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        try {
+            Artisan::call('videos:download');
+
+            $video->refresh();
+            $this->assertNotEquals('completed', $video->status);
+            $this->assertDatabaseHas('warnings', ['source' => 'download_copy_failed', 'video_id' => $video->id]);
+        } finally {
+            chmod($targetDir, 0755);
+            exec('rm -rf '.escapeshellarg($downloadsDir.'/Copy Fail Channel'));
+            unlink($mockYtDlp);
+        }
+    }
+
     public function test_downloader_logs_a_warning_when_a_video_permanently_fails_after_max_retries()
     {
         $channel = Channel::create([
