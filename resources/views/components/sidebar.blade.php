@@ -20,9 +20,6 @@
                 <a href="/settings" class="rounded border-l-4 flex items-center justify-between p-2 {{ request()->is('settings*') ? 'border-blue-500 bg-gray-800 text-white' : 'border-transparent hover:bg-gray-800 text-gray-300 hover:text-gray-100' }}">
                     <span>⚙️ Settings</span>
                     <span class="flex items-center gap-1">
-                        @if(($pendingQueueCount ?? 0) > 0)
-                            <span class="bg-blue-600 text-white text-xs rounded-full px-2 py-0.5">{{ $pendingQueueCount }}</span>
-                        @endif
                         @if(($warningsCount ?? 0) > 0)
                             <span class="bg-red-600 text-white text-xs rounded-full px-2 py-0.5">{{ $warningsCount }}</span>
                         @endif
@@ -31,7 +28,12 @@
             </li>
             @if($advancedModeEnabled ?? false)
                 <li>
-                    <a href="/processes" class="block p-2 rounded border-l-4 {{ request()->is('processes*') ? 'border-blue-500 bg-gray-800 text-white' : 'border-transparent hover:bg-gray-800 text-gray-300 hover:text-gray-100' }}">🧩 Processes</a>
+                    <a href="/processes" class="rounded border-l-4 flex items-center justify-between p-2 {{ request()->is('processes*') ? 'border-blue-500 bg-gray-800 text-white' : 'border-transparent hover:bg-gray-800 text-gray-300 hover:text-gray-100' }}">
+                        <span>🧩 Processes</span>
+                        @if(($pendingQueueCount ?? 0) > 0)
+                            <span class="bg-blue-600 text-white text-xs rounded-full px-2 py-0.5">{{ $pendingQueueCount }}</span>
+                        @endif
+                    </a>
                 </li>
             @endif
         </ul>
