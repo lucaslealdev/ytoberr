@@ -247,6 +247,109 @@ class ChannelViewsTest extends TestCase
         $showResponse->assertSee($expectedSize);
     }
 
+    public function test_channels_index_search_returns_only_matching_channels()
+    {
+        $user = User::factory()->create();
+        Channel::create([
+            'youtube_id' => 'UC_search_match_a',
+            'name' => 'Cooking With Anna',
+            'url' => 'https://example.com/searcha',
+        ]);
+        Channel::create([
+            'youtube_id' => 'UC_search_match_b',
+            'name' => 'Cooking With Ben',
+            'url' => 'https://example.com/searchb',
+        ]);
+        Channel::create([
+            'youtube_id' => 'UC_search_nomatch',
+            'name' => 'Woodworking Basics',
+            'url' => 'https://example.com/searchc',
+        ]);
+
+        $response = $this->actingAs($user)->get('/channels?search=cooking');
+
+        $response->assertStatus(200);
+        $response->assertSee('Cooking With Anna');
+        $response->assertSee('Cooking With Ben');
+        $response->assertDontSee('Woodworking Basics');
+    }
+
+    public function test_channels_index_search_composes_with_sort_options()
+    {
+        $user = User::factory()->create();
+        Channel::create([
+            'youtube_id' => 'UC_search_sort_b',
+            'name' => 'Search Sort Banana',
+            'url' => 'https://example.com/searchsortb',
+        ]);
+        Channel::create([
+            'youtube_id' => 'UC_search_sort_a',
+            'name' => 'Search Sort Apple',
+            'url' => 'https://example.com/searchsorta',
+        ]);
+        Channel::create([
+            'youtube_id' => 'UC_search_sort_excluded',
+            'name' => 'Unrelated Channel',
+            'url' => 'https://example.com/searchsortexcluded',
+        ]);
+
+        $response = $this->actingAs($user)->get('/channels?search=Search+Sort&sort=name');
+
+        $response->assertStatus(200);
+        $response->assertDontSee('Unrelated Channel');
+
+        $content = $response->getContent();
+        $this->assertTrue(strpos($content, 'Search Sort Apple') < strpos($content, 'Search Sort Banana'));
+    }
+
+    public function test_channels_index_search_matches_youtube_id()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_unique_id_token',
+            'name' => 'Channel Without Matching Name',
+            'url' => 'https://example.com/youtubeidsearch',
+        ]);
+        Channel::create([
+            'youtube_id' => 'UC_other_channel',
+            'name' => 'Other Channel',
+            'url' => 'https://example.com/otherchannel',
+        ]);
+
+        $response = $this->actingAs($user)->get('/channels?search=unique_id_token');
+
+        $response->assertStatus(200);
+        $response->assertSee($channel->name);
+        $response->assertDontSee('Other Channel');
+    }
+
+    public function test_channels_index_no_match_search_shows_empty_state_without_erroring()
+    {
+        $user = User::factory()->create();
+        Channel::create([
+            'youtube_id' => 'UC_empty_state_chan',
+            'name' => 'Some Channel',
+            'url' => 'https://example.com/emptystate',
+        ]);
+
+        $response = $this->actingAs($user)->get('/channels?search=NoChannelMatchesThisTerm');
+
+        $response->assertStatus(200);
+        $response->assertSee('No channels found for');
+        $response->assertSee('NoChannelMatchesThisTerm');
+        $response->assertDontSee('Some Channel');
+    }
+
+    public function test_channels_index_with_no_channels_at_all_shows_generic_empty_state()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get('/channels');
+
+        $response->assertStatus(200);
+        $response->assertSee('No channels registered yet.');
+    }
+
     public function test_channels_index_paginates_at_10_per_page()
     {
         $user = User::factory()->create();
