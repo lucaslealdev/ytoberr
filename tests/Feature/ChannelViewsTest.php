@@ -349,6 +349,90 @@ class ChannelViewsTest extends TestCase
         $response->assertSee('The url field must be a valid URL.');
     }
 
+    /**
+     * Creates a fake yt-dlp executable that answers the full JSON dump (-J) call made by
+     * ChannelController::store() when resolving channel metadata, regardless of the URL/args
+     * it's invoked with. It also transparently satisfies the other yt-dlp invocations that
+     * happen synchronously afterwards in the same request (ChannelService's image fetch and
+     * CheckChannelForNewVideosJob's own check-channels run, since QUEUE_CONNECTION=sync in
+     * testing) — those calls fail to find their expected output and simply log warnings
+     * instead of throwing, so a single unconditional response is enough for all of them.
+     */
+    private function mockYtDlpChannelMetadata(string $name, string $channelId, string $channelName): string
+    {
+        $mockYtDlp = storage_path("app/temp/mock_ytdlp_{$name}.sh");
+
+        $metadataJson = json_encode([
+            'channel_id' => $channelId,
+            'channel' => $channelName,
+            'uploader' => $channelName,
+            'thumbnails' => [],
+        ]);
+
+        $script = <<<'BASH'
+#!/bin/bash
+echo '__METADATA__'
+exit 0
+BASH;
+
+        file_put_contents($mockYtDlp, str_replace('__METADATA__', $metadataJson, $script));
+        chmod($mockYtDlp, 0755);
+
+        return $mockYtDlp;
+    }
+
+    public function test_adding_a_channel_that_resolves_to_an_already_registered_youtube_id_is_rejected()
+    {
+        $user = User::factory()->create();
+        $existingChannel = Channel::create([
+            'youtube_id' => 'UC_dup_target_chan',
+            'name' => 'Duplicate Target Channel',
+            'url' => 'https://www.youtube.com/channel/UC_dup_target_chan',
+        ]);
+
+        $mockYtDlp = $this->mockYtDlpChannelMetadata('duplicate_channel', 'UC_dup_target_chan', 'Duplicate Target Channel');
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        // Same underlying channel, added again via a different URL (e.g. the @handle form
+        // instead of the /channel/UC... form) — yt-dlp still resolves it to the same
+        // channel_id, which is what the duplicate check keys off of.
+        $response = $this->actingAs($user)
+            ->from('/channels')
+            ->followingRedirects()
+            ->post('/channels', ['url' => 'https://www.youtube.com/@duplicate_target_handle']);
+
+        $response->assertStatus(200);
+        $response->assertSee('This channel is already registered as "Duplicate Target Channel".');
+
+        $this->assertSame(1, Channel::count());
+        $this->assertSame($existingChannel->id, Channel::where('youtube_id', 'UC_dup_target_chan')->first()->id);
+
+        unlink($mockYtDlp);
+    }
+
+    public function test_adding_a_new_channel_with_a_previously_unseen_youtube_id_still_succeeds()
+    {
+        Storage::fake('public');
+
+        $user = User::factory()->create();
+
+        $mockYtDlp = $this->mockYtDlpChannelMetadata('new_channel', 'UC_brand_new_chan', 'Brand New Channel');
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        $response = $this->actingAs($user)->post('/channels', ['url' => 'https://www.youtube.com/@brand_new_handle']);
+
+        $response->assertRedirect('/channels');
+        $response->assertSessionHasNoErrors();
+
+        $this->assertSame(1, Channel::where('youtube_id', 'UC_brand_new_chan')->count());
+        $this->assertDatabaseHas('channels', [
+            'youtube_id' => 'UC_brand_new_chan',
+            'name' => 'Brand New Channel',
+        ]);
+
+        unlink($mockYtDlp);
+    }
+
     public function test_updating_channel_settings_shows_a_single_status_message_on_the_show_page()
     {
         $user = User::factory()->create();
