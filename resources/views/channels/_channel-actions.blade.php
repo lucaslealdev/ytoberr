@@ -8,6 +8,7 @@
     data-cutoff-date="{{ $channel->cutoff_date }}"
     data-quality="{{ $channel->download_quality ?? '720p' }}"
     data-download-shorts="{{ $channel->download_shorts ? '1' : '0' }}"
+    data-check-interval-hours="{{ $channel->check_interval_hours ?? '' }}"
     data-settings-url="{{ route('channels.settings.update', $channel) }}"
     data-delete-url="{{ route('channels.destroy', $channel) }}"
     data-check-new-videos-url="{{ route('channels.check-new-videos', $channel) }}"

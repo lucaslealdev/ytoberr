@@ -163,8 +163,19 @@ class ChannelController extends Controller
 
     public function show(Request $request, Channel $channel)
     {
-        $videoSort = $request->query('video_sort', 'newest');
+        $search = trim((string) $request->query('search', ''));
+        $videoSort = $request->query('video_sort', $search !== '' ? 'relevance' : 'newest');
+
+        // The channel header shows the channel's total archived-video count regardless of
+        // whatever search below narrows the grid down to, so it's counted separately here
+        // before the search scope is applied.
+        $totalVideosCount = $channel->videos()->where('status', 'completed')->count();
+
         $query = $channel->videos()->where('status', 'completed');
+
+        if ($search !== '') {
+            $query->search($search);
+        }
 
         switch ($videoSort) {
             case 'oldest':
@@ -172,6 +183,13 @@ class ChannelController extends Controller
                 break;
             case 'title':
                 $query->orderBy('title', 'asc');
+                break;
+            case 'relevance':
+                if ($search !== '') {
+                    $query->orderByRaw('rank');
+                } else {
+                    $query->orderBy('published_at', 'desc');
+                }
                 break;
             case 'newest':
             default:
@@ -181,7 +199,7 @@ class ChannelController extends Controller
 
         $videos = $query->paginate(10)->withQueryString();
 
-        return view('channels.show', compact('channel', 'videos', 'videoSort'));
+        return view('channels.show', compact('channel', 'videos', 'videoSort', 'search', 'totalVideosCount'));
     }
 
     public function updateSettings(Request $request, Channel $channel)
@@ -189,18 +207,23 @@ class ChannelController extends Controller
         $request->validate([
             'cutoff_date' => ['required', 'date'],
             'quality' => ['required', 'in:480p,720p,1080p'],
+            // 168 hours = 1 week, a generous upper bound for "how rarely could this possibly
+            // need checking" without allowing a channel to effectively never be checked again.
+            'check_interval_hours' => ['nullable', 'integer', 'min:1', 'max:168'],
         ]);
 
         $channel->update([
             'cutoff_date' => $request->cutoff_date,
             'download_quality' => $request->quality,
             'download_shorts' => $request->boolean('download_shorts'),
+            // Empty/absent means "use the global default" (Channel::DEFAULT_CHECK_INTERVAL_HOURS).
+            'check_interval_hours' => $request->filled('check_interval_hours') ? (int) $request->check_interval_hours : null,
         ]);
 
         if ($request->wantsJson()) {
             return response()->json([
                 'message' => 'Channel settings updated successfully!',
-                'channel' => $channel->only(['id', 'cutoff_date', 'download_quality', 'download_shorts']),
+                'channel' => $channel->only(['id', 'cutoff_date', 'download_quality', 'download_shorts', 'check_interval_hours']),
             ]);
         }
 

@@ -8,8 +8,11 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-// Schedule polling for new videos across channels to run every 3 hours
-Schedule::command('app:check-channels')->everyThreeHours();
+// Ticks hourly and, per channel, only actually checks it once its own check_interval_hours
+// (Channel::DEFAULT_CHECK_INTERVAL_HOURS = 3 if unset) has elapsed since last_checked_at —
+// see Channel::isDueForCheck() and CheckChannelsForNewVideos::handle(). Hourly granularity
+// lets per-channel intervals below the old fixed 3-hour cadence actually take effect.
+Schedule::command('app:check-channels')->hourly();
 
 // Trigger the download queue processor every 2 minutes. Each invocation now drains the
 // pending queue (pacing itself between videos via ytdlp_delay_seconds) for up to

@@ -675,6 +675,106 @@ BASH;
         unlink($mockYtDlp);
     }
 
+    public function test_check_channels_skips_a_channel_not_yet_due_for_its_own_interval()
+    {
+        $channel = Channel::create([
+            'youtube_id' => 'UC_not_due_chan',
+            'name' => 'Not Due Channel',
+            'url' => 'https://www.youtube.com/@not_due_channel',
+            'check_interval_hours' => 6,
+            'last_checked_at' => now()->subHours(2), // Checked 2h ago, interval is 6h: not due yet.
+        ]);
+
+        $videos = [['id' => 'not_due_vid', 'title' => 'Not Due Video', 'upload_date' => '20260713', 'was_live' => false, 'media_type' => null]];
+        $mockYtDlp = $this->mockYtDlpWithVideos('not_due_channel', $videos);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        // The global sweep (no --channel) must respect the per-channel interval.
+        Artisan::call('app:check-channels');
+
+        $this->assertStringNotContainsString('Checking channel: Not Due Channel', Artisan::output());
+        $this->assertDatabaseMissing('videos', ['youtube_id' => 'not_due_vid']);
+        // A skipped channel's last_checked_at must be untouched, not bumped to "now".
+        $this->assertEquals($channel->last_checked_at->timestamp, $channel->fresh()->last_checked_at->timestamp);
+
+        unlink($mockYtDlp);
+    }
+
+    public function test_check_channels_checks_a_channel_once_its_own_interval_has_elapsed()
+    {
+        $channel = Channel::create([
+            'youtube_id' => 'UC_now_due_chan',
+            'name' => 'Now Due Channel',
+            'url' => 'https://www.youtube.com/@now_due_channel',
+            'cutoff_date' => '2020-01-01',
+            'check_interval_hours' => 1,
+            'last_checked_at' => now()->subHours(2), // Checked 2h ago, interval is 1h: due.
+        ]);
+
+        $videos = [['id' => 'now_due_vid', 'title' => 'Now Due Video', 'upload_date' => '20260713', 'was_live' => false, 'media_type' => null]];
+        $mockYtDlp = $this->mockYtDlpWithVideos('now_due_channel', $videos);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('app:check-channels');
+
+        $this->assertStringContainsString('Checking channel: Now Due Channel', Artisan::output());
+        $this->assertDatabaseHas('videos', ['youtube_id' => 'now_due_vid']);
+        $this->assertTrue($channel->fresh()->last_checked_at->gt(now()->subMinute()));
+
+        unlink($mockYtDlp);
+    }
+
+    public function test_check_channels_uses_the_default_interval_when_a_channel_has_not_set_one()
+    {
+        $channel = Channel::create([
+            'youtube_id' => 'UC_default_interval_chan',
+            'name' => 'Default Interval Channel',
+            'url' => 'https://www.youtube.com/@default_interval_channel',
+            // check_interval_hours left null: falls back to Channel::DEFAULT_CHECK_INTERVAL_HOURS (3h).
+            'last_checked_at' => now()->subHours(1),
+        ]);
+
+        $mockYtDlp = $this->mockYtDlpWithVideos('default_interval_channel', []);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        // Checked 1h ago, default interval is 3h: not due yet.
+        Artisan::call('app:check-channels');
+        $this->assertStringNotContainsString('Checking channel: Default Interval Channel', Artisan::output());
+
+        // Move the clock forward past the 3h default and confirm it's picked up on the next sweep.
+        $channel->update(['last_checked_at' => now()->subHours(4)]);
+        Artisan::call('app:check-channels');
+        $this->assertStringContainsString('Checking channel: Default Interval Channel', Artisan::output());
+
+        unlink($mockYtDlp);
+    }
+
+    public function test_check_channels_ignores_the_interval_when_explicitly_targeted_via_the_channel_option()
+    {
+        // The "Check for New Videos" button (CheckChannelForNewVideosJob) always passes
+        // --channel for the clicked channel — that manual, explicit request must run
+        // immediately regardless of how recently it was last auto-checked.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_targeted_bypass_chan',
+            'name' => 'Targeted Bypass Channel',
+            'url' => 'https://www.youtube.com/@targeted_bypass_channel',
+            'cutoff_date' => '2020-01-01',
+            'check_interval_hours' => 6,
+            'last_checked_at' => now(), // Just checked: would never be due on a global sweep.
+        ]);
+
+        $videos = [['id' => 'targeted_bypass_vid', 'title' => 'Targeted Bypass Video', 'upload_date' => '20260713', 'was_live' => false, 'media_type' => null]];
+        $mockYtDlp = $this->mockYtDlpWithVideos('targeted_bypass_channel', $videos);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+
+        $this->assertStringContainsString('Checking channel: Targeted Bypass Channel', Artisan::output());
+        $this->assertDatabaseHas('videos', ['youtube_id' => 'targeted_bypass_vid']);
+
+        unlink($mockYtDlp);
+    }
+
     public function test_check_channels_skips_a_channel_already_locked_by_a_concurrent_check()
     {
         // Simulates a manually-queued CheckChannelForNewVideosJob already running

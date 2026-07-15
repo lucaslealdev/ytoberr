@@ -32,6 +32,12 @@
                 <input type="checkbox" id="channel-settings-download-shorts" name="download_shorts" value="1" class="flex-shrink-0 rounded border-gray-600 bg-gray-800">
             </div>
 
+            <div class="space-y-2">
+                <label class="block text-gray-400 text-sm">Check Interval (hours)</label>
+                <p class="text-xs text-gray-500">How often to check this channel for new videos. Leave blank to use the default ({{ \App\Models\Channel::DEFAULT_CHECK_INTERVAL_HOURS }}h).</p>
+                <input type="number" id="channel-settings-check-interval" name="check_interval_hours" min="1" max="168" placeholder="{{ \App\Models\Channel::DEFAULT_CHECK_INTERVAL_HOURS }}" class="w-full bg-gray-800 border border-gray-700 text-gray-100 rounded p-2">
+            </div>
+
             <div class="flex justify-end gap-3 pt-4 border-t border-gray-800">
                 <button type="button" id="btn-close-channel-settings" class="bg-gray-800 text-gray-300 px-4 py-2 rounded hover:bg-gray-700 text-sm">Close</button>
                 <button type="submit" id="btn-save-channel-settings" class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed">Save Settings</button>
@@ -117,6 +123,7 @@
         const cutoffDateInput = document.getElementById('channel-settings-cutoff-date');
         const qualitySelect = document.getElementById('channel-settings-quality');
         const downloadShortsCheckbox = document.getElementById('channel-settings-download-shorts');
+        const checkIntervalInput = document.getElementById('channel-settings-check-interval');
         const btnSaveSettings = document.getElementById('btn-save-channel-settings');
         let activeSettingsWrapper = null;
 
@@ -125,6 +132,7 @@
             cutoffDateInput.value = wrapper.dataset.cutoffDate || '';
             qualitySelect.value = wrapper.dataset.quality || '720p';
             downloadShortsCheckbox.checked = wrapper.dataset.downloadShorts === '1';
+            checkIntervalInput.value = wrapper.dataset.checkIntervalHours || '';
             settingsError.classList.add('hidden');
             settingsModal.classList.remove('hidden');
         }
@@ -172,6 +180,7 @@
                     cutoff_date: cutoffDateInput.value,
                     quality: qualitySelect.value,
                     download_shorts: downloadShortsCheckbox.checked ? '1' : '0',
+                    check_interval_hours: checkIntervalInput.value,
                 }),
             })
                 .then(function (response) {
@@ -187,6 +196,7 @@
                     wrapper.dataset.cutoffDate = data.channel.cutoff_date;
                     wrapper.dataset.quality = data.channel.download_quality;
                     wrapper.dataset.downloadShorts = data.channel.download_shorts ? '1' : '0';
+                    wrapper.dataset.checkIntervalHours = data.channel.check_interval_hours ?? '';
 
                     const card = wrapper.closest('[data-channel-card]');
                     if (card) {

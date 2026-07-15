@@ -79,6 +79,55 @@ class ChannelViewsTest extends TestCase
         );
     }
 
+    public function test_check_interval_hours_can_be_set_and_cleared_from_the_channel_settings_modal()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_interval_chan',
+            'name' => 'Interval Channel',
+            'url' => 'https://example.com/interval',
+        ]);
+
+        $response = $this->actingAs($user)->patchJson('/channels/'.$channel->id.'/settings', [
+            'quality' => '720p',
+            'cutoff_date' => '2026-01-01',
+            'check_interval_hours' => '6',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson(['channel' => ['check_interval_hours' => 6]]);
+        $this->assertEquals(6, $channel->fresh()->check_interval_hours);
+
+        // Submitting with the field blank clears the override back to "use the default".
+        $response = $this->actingAs($user)->patchJson('/channels/'.$channel->id.'/settings', [
+            'quality' => '720p',
+            'cutoff_date' => '2026-01-01',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson(['channel' => ['check_interval_hours' => null]]);
+        $this->assertNull($channel->fresh()->check_interval_hours);
+    }
+
+    public function test_check_interval_hours_out_of_range_is_rejected()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_interval_invalid_chan',
+            'name' => 'Interval Invalid Channel',
+            'url' => 'https://example.com/intervalinvalid',
+        ]);
+
+        $response = $this->actingAs($user)->patch('/channels/'.$channel->id.'/settings', [
+            'quality' => '720p',
+            'cutoff_date' => '2026-01-01',
+            'check_interval_hours' => '200',
+        ]);
+
+        $response->assertSessionHasErrors('check_interval_hours');
+        $this->assertNull($channel->fresh()->check_interval_hours);
+    }
+
     public function test_channel_actions_card_data_attributes_reflect_true_channel_settings()
     {
         $user = User::factory()->create();
@@ -544,6 +593,80 @@ class ChannelViewsTest extends TestCase
         $page2->assertStatus(200);
         $page2->assertSee('Video Page Item 11');
         $page2->assertSee('Video Page Item 12');
+    }
+
+    public function test_channel_show_search_filters_to_matching_videos_within_that_channel_only()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_channel_search_chan',
+            'name' => 'Channel Search Channel',
+            'url' => 'https://example.com/channelsearch',
+        ]);
+        $otherChannel = Channel::create([
+            'youtube_id' => 'UC_channel_search_other',
+            'name' => 'Other Channel',
+            'url' => 'https://example.com/channelsearchother',
+        ]);
+
+        Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'channel_search_match',
+            'title' => 'A video about Narwhals',
+            'published_at' => now(),
+            'status' => 'completed',
+        ]);
+        Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'channel_search_nomatch',
+            'title' => 'Completely unrelated topic',
+            'published_at' => now(),
+            'status' => 'completed',
+        ]);
+        // Same search term, but on a different channel: must not leak into this channel's results.
+        Video::create([
+            'channel_id' => $otherChannel->id,
+            'youtube_id' => 'channel_search_other_match',
+            'title' => 'Narwhals on another channel',
+            'published_at' => now(),
+            'status' => 'completed',
+        ]);
+
+        $response = $this->actingAs($user)->get('/channels/'.$channel->id.'?search=narwhals');
+
+        $response->assertStatus(200);
+        $response->assertSee('A video about Narwhals');
+        $response->assertDontSee('Completely unrelated topic');
+        $response->assertDontSee('Narwhals on another channel');
+
+        // The channel header's total-videos count must reflect all of the channel's archived
+        // videos, not just the ones matching the current search.
+        $response->assertSee('2 videos archived');
+    }
+
+    public function test_channel_show_search_with_no_match_shows_empty_state_without_erroring()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_channel_search_empty_chan',
+            'name' => 'Channel Search Empty Channel',
+            'url' => 'https://example.com/channelsearchempty',
+        ]);
+
+        Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'channel_search_empty_vid',
+            'title' => 'Some Video',
+            'published_at' => now(),
+            'status' => 'completed',
+        ]);
+
+        $response = $this->actingAs($user)->get('/channels/'.$channel->id.'?search=NoMatchTerm');
+
+        $response->assertStatus(200);
+        $response->assertSee('No videos found for');
+        $response->assertSee('NoMatchTerm');
+        $response->assertDontSee('Some Video');
     }
 
     public function test_channel_show_video_sort_by_title()
