@@ -489,11 +489,11 @@ class ChannelViewsTest extends TestCase
         $response->assertSee('No channels registered yet.');
     }
 
-    public function test_channels_index_paginates_at_10_per_page()
+    public function test_channels_index_paginates_at_18_per_page()
     {
         $user = User::factory()->create();
 
-        for ($i = 1; $i <= 12; $i++) {
+        for ($i = 1; $i <= 20; $i++) {
             Channel::create([
                 'youtube_id' => 'UC_page_chan_'.$i,
                 'name' => 'Page Channel '.str_pad($i, 2, '0', STR_PAD_LEFT),
@@ -504,14 +504,14 @@ class ChannelViewsTest extends TestCase
         $page1 = $this->actingAs($user)->get('/channels');
         $page1->assertStatus(200);
         $page1->assertSee('Page Channel 01');
-        $page1->assertSee('Page Channel 10');
-        $page1->assertDontSee('Page Channel 11');
+        $page1->assertSee('Page Channel 18');
+        $page1->assertDontSee('Page Channel 19');
         $page1->assertSee('Page 1 of 2');
 
         $page2 = $this->actingAs($user)->get('/channels?page=2');
         $page2->assertStatus(200);
-        $page2->assertSee('Page Channel 11');
-        $page2->assertSee('Page Channel 12');
+        $page2->assertSee('Page Channel 19');
+        $page2->assertSee('Page Channel 20');
     }
 
     public function test_channel_show_paginates_videos_at_10_per_page()
