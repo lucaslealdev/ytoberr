@@ -9,6 +9,7 @@ use App\Models\Warning;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Sleep;
 use Tests\TestCase;
 
@@ -460,6 +461,68 @@ BASH);
         // 3 channels: 1 within-channel sleep each (3) + 1 between-channel gap for each of the
         // 2 transitions (2) = 5 total.
         Sleep::assertSleptTimes(5);
+
+        unlink($mockYtDlp);
+    }
+
+    public function test_check_channels_survives_a_video_appearing_twice_in_the_same_batch()
+    {
+        // Simulates the race this command is now hardened against: the same youtube_id being
+        // inserted twice in quick succession. The per-channel Cache::lock (see the sibling
+        // test below) closes the race between this command and a manually-queued job for the
+        // same channel, but it can't stop a video appearing twice within a single batch (as
+        // reproduced deterministically here, no real concurrency needed) or any other
+        // genuinely unforeseen race — so the second Video::create() must hit the unique
+        // constraint and be caught, not crash the rest of the channel's (or run's) processing.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_dup_insert_chan',
+            'name' => 'Duplicate Insert Channel',
+            'url' => 'https://www.youtube.com/@dup_insert_channel',
+            'cutoff_date' => '2020-01-01',
+        ]);
+
+        $video = ['id' => 'dup_insert_vid', 'title' => 'Duplicate Insert Video', 'upload_date' => '20260713', 'was_live' => false, 'media_type' => null];
+        $mockYtDlp = $this->mockYtDlpWithVideos('dup_insert_channel', [$video, $video]);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        $exitCode = Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+
+        $this->assertEquals(0, $exitCode, 'The app:check-channels command should not crash on a duplicate insert.');
+        $this->assertEquals(1, Video::where('youtube_id', 'dup_insert_vid')->count());
+        $this->assertDatabaseHas('warnings', ['source' => 'video_duplicate_insert_skipped']);
+
+        unlink($mockYtDlp);
+    }
+
+    public function test_check_channels_skips_a_channel_already_locked_by_a_concurrent_check()
+    {
+        // Simulates a manually-queued CheckChannelForNewVideosJob already running
+        // app:check-channels --channel=X for this channel (holding this same cache lock)
+        // at the moment the scheduled sweep reaches it. ShouldBeUnique on that job only
+        // stops two *queued* jobs for the channel from overlapping — it has no visibility
+        // into this command's own synchronous run, so this per-channel lock is what actually
+        // closes that race: the scheduled run must skip the channel rather than block on/
+        // race with whichever process already holds the lock.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_locked_chan',
+            'name' => 'Locked Channel',
+            'url' => 'https://www.youtube.com/@locked_channel',
+            'cutoff_date' => '2020-01-01',
+        ]);
+
+        $videos = [['id' => 'locked_vid', 'title' => 'Locked Video', 'upload_date' => '20260713', 'was_live' => false, 'media_type' => null]];
+        $mockYtDlp = $this->mockYtDlpWithVideos('locked_channel', $videos);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        $lock = Cache::lock("check-channel-videos:{$channel->id}", 60);
+        $this->assertTrue($lock->get());
+
+        Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+
+        $this->assertStringContainsString('already in progress', Artisan::output());
+        $this->assertDatabaseMissing('videos', ['youtube_id' => 'locked_vid']);
+
+        $lock->release();
 
         unlink($mockYtDlp);
     }
