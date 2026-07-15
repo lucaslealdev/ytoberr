@@ -20,6 +20,7 @@ class ChannelViewsTest extends TestCase
         $downloadsDir = Setting::getStoragePath();
         foreach ([
             'Size Channel',
+            'Mixed Size Channel',
             'Delete Files Off Channel',
             'Delete Files On Channel',
             'Delete Files Missing Folder Channel',
@@ -245,6 +246,79 @@ class ChannelViewsTest extends TestCase
         $showResponse = $this->actingAs($user)->get('/channels/'.$channel->id);
         $showResponse->assertStatus(200);
         $showResponse->assertSee($expectedSize);
+    }
+
+    public function test_total_downloaded_bytes_sums_the_cached_file_size_column_without_touching_the_filesystem()
+    {
+        $channel = Channel::create([
+            'youtube_id' => 'UC_cached_size_chan',
+            'name' => 'Cached Size Channel',
+            'url' => 'https://example.com/cachedsize',
+        ]);
+
+        // These file_path values are never actually created on disk. If totalDownloadedBytes()
+        // fell back to a live filesystem stat for these rows, the total would come back short
+        // (missing files return null from fileSize()) instead of the cached amount.
+        Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'cached_size_vid_1',
+            'title' => 'Cached Size Video 1',
+            'published_at' => '2026-07-10 12:00:00',
+            'status' => 'completed',
+            'file_path' => 'Cached Size Channel/Season 2026/video-1.mp4',
+            'file_size' => 1_000_000,
+        ]);
+
+        Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'cached_size_vid_2',
+            'title' => 'Cached Size Video 2',
+            'published_at' => '2026-07-10 12:00:00',
+            'status' => 'completed',
+            'file_path' => 'Cached Size Channel/Season 2026/video-2.mp4',
+            'file_size' => 500_000,
+        ]);
+
+        $this->assertSame(1_500_000, $channel->totalDownloadedBytes());
+    }
+
+    public function test_total_downloaded_bytes_still_includes_older_videos_with_a_null_file_size_via_live_fallback()
+    {
+        $channel = Channel::create([
+            'youtube_id' => 'UC_mixed_size_chan',
+            'name' => 'Mixed Size Channel',
+            'url' => 'https://example.com/mixedsize',
+        ]);
+
+        // Newer video: file_size cached at download time, no filesystem access needed.
+        Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'mixed_size_new_vid',
+            'title' => 'Mixed Size New Video',
+            'published_at' => '2026-07-10 12:00:00',
+            'status' => 'completed',
+            'file_path' => 'Mixed Size Channel/Season 2026/new-video.mp4',
+            'file_size' => 1_000_000,
+        ]);
+
+        // Older video predating the file_size column: null in the DB, so it must still be
+        // counted via a live filesystem stat on the actual file.
+        $downloadsDir = Setting::getStoragePath();
+        $videoDir = $downloadsDir.'/Mixed Size Channel/Season 2026';
+        mkdir($videoDir, 0755, true);
+        $oldRelativePath = 'Mixed Size Channel/Season 2026/old-video.mp4';
+        file_put_contents($downloadsDir.'/'.$oldRelativePath, str_repeat('a', 250_000));
+
+        Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'mixed_size_old_vid',
+            'title' => 'Mixed Size Old Video',
+            'published_at' => '2026-07-10 12:00:00',
+            'status' => 'completed',
+            'file_path' => $oldRelativePath,
+        ]);
+
+        $this->assertSame(1_250_000, $channel->totalDownloadedBytes());
     }
 
     public function test_channels_index_paginates_at_10_per_page()

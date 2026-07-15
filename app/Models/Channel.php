@@ -25,9 +25,21 @@ class Channel extends Model
 
     /**
      * Total size in bytes of all locally-downloaded videos for this channel.
+     *
+     * Sums the cached `file_size` column directly in the database (no filesystem access) for
+     * videos that have one, and only falls back to a live per-video filesystem stat for the
+     * remainder — videos downloaded before that column existed and not yet backfilled.
      */
     public function totalDownloadedBytes(): int
     {
-        return $this->videos->sum(fn (Video $video) => $video->fileSize() ?? 0);
+        $knownBytes = (int) $this->videos()->whereNotNull('file_size')->sum('file_size');
+
+        $unknownBytes = $this->videos()
+            ->whereNull('file_size')
+            ->whereNotNull('file_path')
+            ->get()
+            ->sum(fn (Video $video) => $video->fileSize() ?? 0);
+
+        return $knownBytes + $unknownBytes;
     }
 }

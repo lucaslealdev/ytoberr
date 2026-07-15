@@ -195,6 +195,7 @@ class DownloadNextVideo extends Command
             $video->update([
                 'status' => 'completed',
                 'file_path' => $relativePath,
+                'file_size' => filesize($targetFile) ?: null,
                 'downloaded_at' => now(),
                 'retries' => 0,
                 'last_error' => null,
