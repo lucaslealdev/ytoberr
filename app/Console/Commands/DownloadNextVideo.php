@@ -11,6 +11,7 @@ use App\Support\PlexNaming;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Sleep;
 use Illuminate\Support\Str;
 
 class DownloadNextVideo extends Command
@@ -19,23 +20,76 @@ class DownloadNextVideo extends Command
 
     protected $description = 'Pulls the next pending video from the database queue and downloads it using yt-dlp, storing it alongside a companion thumbnail using Plex-friendly naming.';
 
+    /**
+     * Upper bound (in seconds) on how long a single invocation keeps draining the pending
+     * queue. The schedule (routes/console.php) fires this command every 2 minutes; this
+     * budget stays comfortably under that so a busy invocation reliably wraps up between
+     * videos and hands control back to the scheduler, rather than one large backlog turning
+     * into one never-ending process. It's only checked *between* videos — an in-progress
+     * download is never interrupted mid-flight, it's bounded solely by its own 30-minute
+     * command timeout further down. If a run does end up exceeding this because the last
+     * video happened to take a while, that's fine: withoutOverlapping() (routes/console.php)
+     * already guarantees the next scheduled tick simply skips itself instead of overlapping.
+     */
+    private const MAX_RUNTIME_SECONDS = 100;
+
     public function handle(PlexAssetService $plexAssets, YtDlpWrapper $ytDlpWrapper)
     {
         $this->info('Starting download queue processor...');
 
-        // 1. Fetch next pending video
-        $video = Video::with('channel')
-            ->where('status', 'pending')
-            ->where('prevent_download', false)
-            ->orderBy('created_at', 'asc')
-            ->first();
+        $startedAt = now();
+        $processedCount = 0;
 
-        if (! $video) {
-            $this->info('No pending videos in the queue.');
+        while (true) {
+            // 1. Fetch next pending video
+            $video = Video::with('channel')
+                ->where('status', 'pending')
+                ->where('prevent_download', false)
+                ->orderBy('created_at', 'asc')
+                ->first();
 
-            return 0;
+            if (! $video) {
+                $this->info($processedCount > 0 ? 'No more pending videos in the queue.' : 'No pending videos in the queue.');
+
+                break;
+            }
+
+            if ($processedCount > 0) {
+                if ($startedAt->diffInSeconds(now()) >= self::MAX_RUNTIME_SECONDS) {
+                    $this->info('Reached this invocation\'s time budget; leaving the rest of the queue for the next scheduled run.');
+
+                    break;
+                }
+
+                // Sleep between videos, same reasoning as the between-channels/requests sleeps
+                // in CheckChannelsForNewVideos: --sleep-requests only throttles requests
+                // *within* a single yt-dlp process, so pacing across separate downloads has to
+                // be an explicit sleep here in the loop.
+                $delay = Setting::ytdlpDelaySeconds();
+                if ($delay > 0) {
+                    Sleep::for($delay)->seconds();
+                }
+            }
+
+            $this->processVideo($video, $plexAssets, $ytDlpWrapper);
+            $processedCount++;
         }
 
+        if ($processedCount > 0) {
+            $this->info("Done. Processed {$processedCount} video(s) this run.");
+        }
+
+        return 0;
+    }
+
+    /**
+     * Download and file away a single video: the entire lifecycle from "downloading" through
+     * either "completed" or a handled failure. Broken out from handle() so the queue-draining
+     * loop there can call this once per pending video without any single video's outcome
+     * (success or failure) terminating the whole command.
+     */
+    private function processVideo(Video $video, PlexAssetService $plexAssets, YtDlpWrapper $ytDlpWrapper): void
+    {
         $this->info("Processing video: {$video->title} (ID: {$video->youtube_id})");
 
         // 2. Mark as downloading
@@ -125,7 +179,7 @@ class DownloadNextVideo extends Command
                 $this->handleFailure($video, 'Video file not found after download.');
                 $this->cleanup($tempDir);
 
-                return 1;
+                return;
             }
 
             // Build target file path according to Plex conventions:
@@ -160,7 +214,7 @@ class DownloadNextVideo extends Command
                 $this->handleFailure($video, 'Failed to copy the downloaded file into the destination directory.');
                 $this->cleanup($tempDir);
 
-                return 1;
+                return;
             }
 
             // Build relative file path for database storage
@@ -205,15 +259,11 @@ class DownloadNextVideo extends Command
 
             $this->info("Successfully downloaded video: {$video->title}");
             $this->cleanup($tempDir);
-
-            return 0;
         } else {
             // Download Failed! Handle resilient error catching
             $this->error("Download failed for video {$video->youtube_id}");
             $this->handleFailure($video, $rawOutput);
             $this->cleanup($tempDir);
-
-            return 1;
         }
     }
 

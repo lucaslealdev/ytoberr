@@ -8,6 +8,7 @@ use App\Models\Video;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Sleep;
 use Tests\TestCase;
 
 class DownloadNextVideoTest extends TestCase
@@ -18,6 +19,11 @@ class DownloadNextVideoTest extends TestCase
     {
         parent::setUp();
         Storage::fake('public');
+
+        // yt-dlp is always mocked in this test class; the production safety delay between
+        // videos in the queue-draining loop would only slow the suite down without adding
+        // value. Tests that specifically exercise the delay override it below.
+        Setting::set('ytdlp_delay_seconds', '0');
     }
 
     protected function tearDown(): void
@@ -165,8 +171,8 @@ BASH);
         chmod($mockYtDlp, 0755);
         config(['services.ytdlp_path' => $mockYtDlp]);
 
-        // videos:download processes one pending video (oldest created_at first) per call.
-        Artisan::call('videos:download');
+        // A single videos:download invocation now drains the whole pending queue (oldest
+        // created_at first), one video at a time.
         Artisan::call('videos:download');
 
         $videoOne->refresh();
@@ -249,10 +255,10 @@ exit 1
         // Reset consecutive failures to 0
         Setting::set('consecutive_failures', '0');
 
-        // Run download command 3 times (since each run downloads only 1 video)
-        Artisan::call('videos:download'); // Fails v1 -> failures = 1
-        Artisan::call('videos:download'); // Fails v2 -> failures = 2
-        Artisan::call('videos:download'); // Fails v3 -> failures = 3 (suspends queue)
+        // A single invocation now drains the whole queue: v1 fails (failures = 1), v2 fails
+        // (failures = 2), v3 fails (failures = 3, suspending the queue), at which point v4
+        // (and any other remaining pending videos) are marked failed by the suspension itself.
+        Artisan::call('videos:download');
 
         // On the third failure, the queue suspends, so v4 and any remaining pending videos are marked as failed
         $v1->refresh();
@@ -483,5 +489,128 @@ BASH;
 
         unlink($mockYtDlp);
         unlink($capturedArgsPath);
+    }
+
+    public function test_downloader_drains_multiple_pending_videos_in_a_single_invocation()
+    {
+        // Regression test for the fix: a single videos:download invocation must keep
+        // processing pending videos one after another instead of handling exactly one and
+        // exiting, so a backlog isn't stuck waiting on the every-2-minutes schedule tick.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_multi_chan',
+            'name' => 'Multi Channel',
+            'url' => 'https://example.com/multi',
+        ]);
+
+        $videoOne = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'multi_vid_1',
+            'title' => 'Multi Video One',
+            'published_at' => '2026-07-11 08:00:00',
+            'status' => 'pending',
+        ]);
+        $videoTwo = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'multi_vid_2',
+            'title' => 'Multi Video Two',
+            'published_at' => '2026-07-11 09:00:00',
+            'status' => 'pending',
+        ]);
+        $videoThree = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'multi_vid_3',
+            'title' => 'Multi Video Three',
+            'published_at' => '2026-07-11 10:00:00',
+            'status' => 'pending',
+        ]);
+
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_multi.sh');
+        file_put_contents($mockYtDlp, <<<'BASH'
+#!/bin/bash
+for arg in "$@"; do
+    if [[ $arg == *video.* ]]; then
+        out_dir=$(dirname "$arg")
+        mkdir -p "$out_dir"
+        echo "dummy video" > "$out_dir/video.mp4"
+        echo "dummy thumb" > "$out_dir/video.jpg"
+        echo "{}" > "$out_dir/video.info.json"
+        exit 0
+    fi
+done
+exit 1
+BASH);
+        chmod($mockYtDlp, 0755);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        try {
+            Artisan::call('videos:download');
+
+            $videoOne->refresh();
+            $videoTwo->refresh();
+            $videoThree->refresh();
+
+            $this->assertEquals('completed', $videoOne->status);
+            $this->assertEquals('completed', $videoTwo->status);
+            $this->assertEquals('completed', $videoThree->status);
+
+            $this->assertStringContainsString('Done. Processed 3 video(s) this run.', Artisan::output());
+        } finally {
+            unlink($mockYtDlp);
+            $downloadsDir = Setting::getStoragePath();
+            exec('rm -rf '.escapeshellarg($downloadsDir.'/Multi Channel'));
+        }
+    }
+
+    public function test_downloader_sleeps_between_videos_but_not_before_the_first_or_after_the_last()
+    {
+        // --sleep-requests/--sleep-interval only throttle requests *within* a single yt-dlp
+        // process; since the queue-draining loop fires a fresh yt-dlp process per video, the
+        // actual pacing between videos has to be an explicit sleep in that loop, mirroring how
+        // CheckChannelsForNewVideos sleeps between channels.
+        Sleep::fake();
+        Setting::set('ytdlp_delay_seconds', '3');
+
+        $channel = Channel::create([
+            'youtube_id' => 'UC_sleep_multi_chan',
+            'name' => 'Sleep Multi Channel',
+            'url' => 'https://example.com/sleepmulti',
+        ]);
+
+        Video::create(['channel_id' => $channel->id, 'youtube_id' => 'sleep_multi_1', 'title' => 'One', 'published_at' => '2026-07-11 08:00:00', 'status' => 'pending']);
+        Video::create(['channel_id' => $channel->id, 'youtube_id' => 'sleep_multi_2', 'title' => 'Two', 'published_at' => '2026-07-11 09:00:00', 'status' => 'pending']);
+        Video::create(['channel_id' => $channel->id, 'youtube_id' => 'sleep_multi_3', 'title' => 'Three', 'published_at' => '2026-07-11 10:00:00', 'status' => 'pending']);
+
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_sleep_multi.sh');
+        file_put_contents($mockYtDlp, <<<'BASH'
+#!/bin/bash
+for arg in "$@"; do
+    if [[ $arg == *video.* ]]; then
+        out_dir=$(dirname "$arg")
+        mkdir -p "$out_dir"
+        echo "dummy video" > "$out_dir/video.mp4"
+        echo "dummy thumb" > "$out_dir/video.jpg"
+        echo "{}" > "$out_dir/video.info.json"
+        exit 0
+    fi
+done
+exit 1
+BASH);
+        chmod($mockYtDlp, 0755);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        try {
+            Artisan::call('videos:download');
+
+            // 3 videos: a gap only between consecutive videos, none before the first or after
+            // the last, so 2 total sleeps of the configured delay.
+            Sleep::assertSequence([
+                Sleep::for(3)->seconds(),
+                Sleep::for(3)->seconds(),
+            ]);
+        } finally {
+            unlink($mockYtDlp);
+            $downloadsDir = Setting::getStoragePath();
+            exec('rm -rf '.escapeshellarg($downloadsDir.'/Sleep Multi Channel'));
+        }
     }
 }
