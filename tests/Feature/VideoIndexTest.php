@@ -34,7 +34,7 @@ class VideoIndexTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('Index Test Video');
         $response->assertSee('Index Channel');
-        $response->assertSee('/videos/' . $video->id, false);
+        $response->assertSee('/videos/'.$video->id, false);
     }
 
     public function test_videos_index_shows_empty_state()
@@ -47,7 +47,7 @@ class VideoIndexTest extends TestCase
         $response->assertSee('No videos archived yet.');
     }
 
-    public function test_videos_index_paginates_at_10_per_page()
+    public function test_videos_index_paginates_at_12_per_page()
     {
         $user = User::factory()->create();
         $channel = Channel::create([
@@ -59,8 +59,8 @@ class VideoIndexTest extends TestCase
         for ($i = 1; $i <= 15; $i++) {
             Video::create([
                 'channel_id' => $channel->id,
-                'youtube_id' => 'paginate_vid_' . $i,
-                'title' => 'Paginate Video ' . $i,
+                'youtube_id' => 'paginate_vid_'.$i,
+                'title' => 'Paginate Video '.$i,
                 'published_at' => now()->subMinutes($i),
                 'status' => 'completed',
             ]);
@@ -69,13 +69,13 @@ class VideoIndexTest extends TestCase
         $page1 = $this->actingAs($user)->get('/videos');
         $page1->assertStatus(200);
         $page1->assertSee('Paginate Video 1');
-        $page1->assertSee('Paginate Video 10');
-        $page1->assertDontSee('Paginate Video 11');
+        $page1->assertSee('Paginate Video 12');
+        $page1->assertDontSee('Paginate Video 13');
         $page1->assertSee('Page 1 of 2');
 
         $page2 = $this->actingAs($user)->get('/videos?page=2');
         $page2->assertStatus(200);
-        $page2->assertSee('Paginate Video 11');
+        $page2->assertSee('Paginate Video 13');
         $page2->assertSee('Paginate Video 15');
         $page2->assertSee('Page 2 of 2');
     }
@@ -169,7 +169,7 @@ class VideoIndexTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $response = $this->actingAs($user)->get('/videos?search=' . urlencode('"weird" OR *query* -- test'));
+        $response = $this->actingAs($user)->get('/videos?search='.urlencode('"weird" OR *query* -- test'));
 
         $response->assertStatus(200);
     }
