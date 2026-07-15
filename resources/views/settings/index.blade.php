@@ -131,6 +131,9 @@
                     <label class="block text-gray-400 text-sm mb-1">Downloads Directory Path</label>
                     <input type="text" name="storage_path" value="{{ old('storage_path', $storagePath) }}" class="w-full p-2 bg-gray-800 border border-gray-700 rounded text-gray-100" required>
                     <p class="text-xs text-gray-500 mt-1">Files will be saved here. Priorities: Database Setting (this) > ENV ('DOWNLOADS_PATH') > Default Directory (storage/app/public/downloads).</p>
+                    @error('storage_path')
+                        <p class="text-red-400 text-xs mt-1">{{ $message }}</p>
+                    @enderror
                 </div>
                 <div class="flex items-center space-x-2">
                     <button type="submit" class="bg-blue-600 text-white p-2 rounded hover:bg-blue-700">Update Path</button>

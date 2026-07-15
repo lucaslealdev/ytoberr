@@ -49,6 +49,15 @@ class SettingsControllerTest extends TestCase
             unlink($cookiesPath);
         }
 
+        foreach ([
+            '/tmp/ytoberr-test-storage-path',
+            '/tmp/ytoberr-test-storage-path-writable-parent',
+        ] as $testDir) {
+            if (file_exists($testDir)) {
+                exec('rm -rf '.escapeshellarg($testDir));
+            }
+        }
+
         parent::tearDown();
     }
 
@@ -297,6 +306,61 @@ class SettingsControllerTest extends TestCase
 
         $response->assertRedirect();
         $this->assertEquals($newPath, Setting::getStoragePath());
+    }
+
+    public function test_update_storage_path_creates_the_directory_when_it_does_not_exist_yet()
+    {
+        $user = User::factory()->create();
+
+        $newPath = '/tmp/ytoberr-test-storage-path';
+        $this->assertDirectoryDoesNotExist($newPath);
+
+        $response = $this->actingAs($user)->post('/settings/storage-path', [
+            'storage_path' => $newPath,
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHasNoErrors();
+        $this->assertDirectoryExists($newPath);
+        $this->assertEquals($newPath, Setting::getStoragePath());
+    }
+
+    public function test_update_storage_path_rejects_a_path_whose_parent_is_not_writable()
+    {
+        $user = User::factory()->create();
+
+        $readOnlyParent = '/tmp/ytoberr-test-storage-path-writable-parent';
+        mkdir($readOnlyParent, 0555, true);
+
+        try {
+            $response = $this->actingAs($user)->post('/settings/storage-path', [
+                'storage_path' => $readOnlyParent.'/downloads',
+            ]);
+
+            $response->assertSessionHasErrors('storage_path');
+            $this->assertNotEquals($readOnlyParent.'/downloads', Setting::getStoragePath());
+        } finally {
+            chmod($readOnlyParent, 0755);
+        }
+    }
+
+    public function test_update_storage_path_rejects_an_existing_but_unwritable_directory()
+    {
+        $user = User::factory()->create();
+
+        $unwritableDir = '/tmp/ytoberr-test-storage-path';
+        mkdir($unwritableDir, 0555, true);
+
+        try {
+            $response = $this->actingAs($user)->post('/settings/storage-path', [
+                'storage_path' => $unwritableDir,
+            ]);
+
+            $response->assertSessionHasErrors('storage_path');
+            $this->assertNotEquals($unwritableDir, Setting::getStoragePath());
+        } finally {
+            chmod($unwritableDir, 0755);
+        }
     }
 
     public function test_reset_cache_empties_the_yt_dlp_caches_table()
