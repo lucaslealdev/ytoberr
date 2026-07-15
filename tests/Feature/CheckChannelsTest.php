@@ -409,11 +409,13 @@ BASH;
         unlink($capturedUrlFile);
     }
 
-    public function test_check_channels_marks_permanently_unavailable_videos_as_failed_instead_of_retrying_forever()
+    public function test_check_channels_marks_permanently_unavailable_videos_as_failed_after_three_consecutive_failures()
     {
         // Regression test: previously, a video whose full metadata fetch failed was never
         // persisted, so it kept reappearing as a "new" candidate on every run (every 3 hours,
-        // forever) and kept generating identical video_check_failed warnings.
+        // forever) and kept generating identical video_check_failed warnings. It must now stop
+        // retrying — but only once it has genuinely failed 3 checks in a row (see the sibling
+        // test below for why a single failure must NOT be enough).
         $channel = Channel::create([
             'youtube_id' => 'UC_unavailable_chan',
             'name' => 'Unavailable Video Channel',
@@ -446,10 +448,17 @@ BASH);
         chmod($mockYtDlp, 0755);
         config(['services.ytdlp_path' => $mockYtDlp]);
 
+        // Runs 1 and 2: still just transient-looking failures, so no video row yet.
+        Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+        Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+        $this->assertNull(Video::where('youtube_id', 'i__XFWFch_s')->first());
+        $this->assertEquals(2, Warning::where('source', 'video_check_failed')->count());
+
+        // Run 3: the same video has now failed 3 times in a row — accept it's really gone.
         Artisan::call('app:check-channels', ['--channel' => $channel->id]);
 
         $video = Video::where('youtube_id', 'i__XFWFch_s')->first();
-        $this->assertNotNull($video, 'A failed placeholder video row should have been created for the unavailable video.');
+        $this->assertNotNull($video, 'A failed placeholder video row should have been created after 3 consecutive failures.');
         $this->assertEquals('failed', $video->status);
         $this->assertTrue((bool) $video->prevent_download);
         $this->assertNotNull($video->unavailable_reason);
@@ -462,9 +471,77 @@ BASH);
         // Running the check again must not re-attempt the now-known video: it's excluded by
         // the existence check before the expensive per-video fetch ever happens again.
         Artisan::call('app:check-channels', ['--channel' => $channel->id]);
-        $this->assertEquals(1, Warning::where('source', 'video_check_failed')->count());
+        $this->assertEquals(3, Warning::where('source', 'video_check_failed')->count());
 
         unlink($mockYtDlp);
+    }
+
+    public function test_check_channels_does_not_permanently_blacklist_a_video_after_a_single_transient_failure()
+    {
+        // Regression test: yt-dlp/YouTube's bot-detection (or a JS-runtime hiccup) can produce a
+        // one-off "Video unavailable" response for a video that is actually fine — observed in
+        // practice against a real video that came back with full metadata on the very next
+        // attempt. A single failed check must not permanently exclude it from ever being queued.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_flaky_chan',
+            'name' => 'Flaky Video Channel',
+            'url' => 'https://www.youtube.com/@flaky_channel',
+            'download_quality' => '720p',
+            'cutoff_date' => '2020-01-01',
+        ]);
+
+        $stateFile = storage_path('app/temp/flaky_video_attempts.txt');
+        if (file_exists($stateFile)) {
+            unlink($stateFile);
+        }
+
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_flaky.sh');
+        $script = <<<'BASH'
+#!/bin/bash
+if [[ "$*" == *"--print-to-file"* ]]; then
+    args=("$@")
+    for i in "${!args[@]}"; do
+        if [[ "${args[$i]}" == "--print-to-file" ]]; then
+            outfile="${args[$((i+2))]}"
+            echo '{"live_status": null}' > "$outfile"
+            exit 0
+        fi
+    done
+fi
+
+if [[ "$*" == *"--flat-playlist"* ]]; then
+    echo '{"id":"flaky_vid","title":"Flaky Video"}'
+    exit 0
+fi
+
+echo "x" >> __STATE_FILE__
+attempts=$(wc -l < __STATE_FILE__)
+if [[ "$attempts" -eq 1 ]]; then
+    echo "ERROR: [youtube] flaky_vid: Video unavailable. This video is not available"
+    exit 1
+fi
+echo '{"id":"flaky_vid","title":"Flaky Video","upload_date":"20260701","was_live":false,"media_type":null}'
+exit 0
+BASH;
+
+        file_put_contents($mockYtDlp, str_replace('__STATE_FILE__', $stateFile, $script));
+        chmod($mockYtDlp, 0755);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        // Run 1: fails once (transient).
+        Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+        $this->assertNull(Video::where('youtube_id', 'flaky_vid')->first(), 'A single failure must not create a blacklisted placeholder.');
+
+        // Run 2: succeeds — the video must be queued normally, not treated as unavailable.
+        Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+        $video = Video::where('youtube_id', 'flaky_vid')->first();
+        $this->assertNotNull($video);
+        $this->assertEquals('pending', $video->status);
+        $this->assertFalse((bool) $video->prevent_download);
+        $this->assertNull($video->unavailable_reason);
+
+        unlink($mockYtDlp);
+        unlink($stateFile);
     }
 
     public function test_check_channels_sleeps_between_the_two_ytdlp_calls_for_the_same_channel()
