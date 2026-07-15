@@ -82,6 +82,11 @@ BASH);
         $this->assertEquals('completed', $video->status);
         $this->assertNotNull($video->file_path);
 
+        // file_size must be captured at download time from the copied file, matching its
+        // actual size on disk, so later reads never need to re-stat the filesystem.
+        $downloadsDirForSize = Setting::getStoragePath();
+        $this->assertEquals(filesize($downloadsDirForSize.'/'.$video->file_path), $video->file_size);
+
         // Assert relative file path structure targets Plex:
         // {downloads_dir}/{channel}/Season {YYYY}/{filename}.{ext}
         $this->assertStringContainsString('Space Channel/Season 2026', $video->file_path);

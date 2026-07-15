@@ -11,7 +11,7 @@ class Video extends Model
 {
     protected $fillable = [
         'channel_id', 'youtube_id', 'title', 'description', 'published_at', 'duration',
-        'file_path', 'thumbnail_path', 'status', 'retries', 'last_error',
+        'file_path', 'file_size', 'thumbnail_path', 'status', 'retries', 'last_error',
         'prevent_download', 'unavailable_reason', 'downloaded_at',
     ];
 
@@ -112,9 +112,17 @@ class Video extends Model
 
     /**
      * Size in bytes of the locally-saved video file, or null if it isn't set or the file is missing on disk.
+     *
+     * Prefers the cached `file_size` column (populated at download time) to avoid a filesystem
+     * stat on every call; falls back to a live stat for videos downloaded before that column
+     * existed, so they keep working correctly without needing a backfill.
      */
     public function fileSize(): ?int
     {
+        if ($this->file_size !== null) {
+            return $this->file_size;
+        }
+
         if (! $this->file_path) {
             return null;
         }
