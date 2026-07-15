@@ -26,9 +26,11 @@ class CheckChannelsTest extends TestCase
     }
 
     /**
-     * Create a fake yt-dlp executable that answers both calls the check-channels command
-     * makes: the live_status precheck (YtDlpWrapper's --print-to-file selective mode) and
-     * the video listing (-j, one JSON object per line on stdout).
+     * Create a fake yt-dlp executable that answers all three calls the check-channels command
+     * makes: the live_status precheck (YtDlpWrapper's --print-to-file selective mode), the
+     * flat-playlist listing (--flat-playlist -j, one JSON object per line), and the full
+     * per-video extraction (-j against a single watch URL — replies with just that video's
+     * JSON line, found by matching the "v=" id in the URL).
      *
      * @param  array<int, array<string, mixed>>  $videos
      */
@@ -53,9 +55,19 @@ if [[ "$*" == *"--print-to-file"* ]]; then
     done
 fi
 
-cat <<'VIDEOS'
+VIDEOS_JSON=$(cat <<'VIDEOSEOF'
 __VIDEOS__
-VIDEOS
+VIDEOSEOF
+)
+
+if [[ "$*" == *"--flat-playlist"* ]]; then
+    echo "$VIDEOS_JSON"
+    exit 0
+fi
+
+last_arg="${@: -1}"
+video_id=$(echo "$last_arg" | grep -oP '(?<=v=)[^&]+')
+echo "$VIDEOS_JSON" | grep -F "\"id\":\"$video_id\""
 exit 0
 BASH;
 
