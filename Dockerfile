@@ -81,6 +81,14 @@ RUN chmod +x /usr/local/bin/install-php-extensions \
 
 WORKDIR /var/www/html
 
+# PHP_CLI_SERVER_WORKERS=12: `php artisan serve` (docker/supervisord.conf's [program:web]) serves
+# both dashboard requests and large video file streams (MediaController::show) through this same
+# fixed worker pool - a single video's Range requests during playback/download can tie up several
+# workers for the whole transfer, so the old default of 4 left almost nothing for everyone else.
+# 12 gives a self-hosted/small-household deployment enough headroom for a few concurrent video
+# streams plus normal browsing, without excessive memory overhead. See README.md for guidance on
+# raising it further or fronting the container with a real reverse proxy (nginx/Caddy/Traefik)
+# for larger deployments.
 ENV APP_ENV=production \
     APP_DEBUG=false \
     APP_URL=http://localhost:8080 \
@@ -93,7 +101,7 @@ ENV APP_ENV=production \
     CACHE_STORE=database \
     QUEUE_CONNECTION=database \
     FILESYSTEM_DISK=local \
-    PHP_CLI_SERVER_WORKERS=4 \
+    PHP_CLI_SERVER_WORKERS=12 \
     PATH="/var/www/html/bin:${PATH}"
 
 COPY . .
