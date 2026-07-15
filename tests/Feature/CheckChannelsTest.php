@@ -354,6 +354,61 @@ exit 1
         unlink($mockYtDlp);
     }
 
+    public function test_check_channels_queries_the_videos_tab_explicitly_instead_of_the_bare_channel_url()
+    {
+        // Regression test: a bare channel handle URL (as stored on Channel::url) makes yt-dlp
+        // enumerate every tab (Videos, Shorts, Live) as separate sub-playlists, each
+        // independently capped by --playlist-items :10 — so without pinning to /videos, the
+        // "last 10" candidate list can balloon past 10 and mix in unrelated Shorts/streams,
+        // including ones far outside the actual upload recency order.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_videos_tab_chan',
+            'name' => 'Videos Tab Channel',
+            'url' => 'https://www.youtube.com/@videos_tab_channel',
+            'download_quality' => '720p',
+        ]);
+
+        $capturedUrlFile = storage_path('app/temp/captured_flat_playlist_url.txt');
+        if (file_exists($capturedUrlFile)) {
+            unlink($capturedUrlFile);
+        }
+
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_videos_tab.sh');
+        $script = <<<'BASH'
+#!/bin/bash
+if [[ "$*" == *"--print-to-file"* ]]; then
+    args=("$@")
+    for i in "${!args[@]}"; do
+        if [[ "${args[$i]}" == "--print-to-file" ]]; then
+            outfile="${args[$((i+2))]}"
+            echo '{"live_status": null}' > "$outfile"
+            exit 0
+        fi
+    done
+fi
+
+if [[ "$*" == *"--flat-playlist"* ]]; then
+    last_arg="${@: -1}"
+    echo "$last_arg" >> __CAPTURE_FILE__
+    exit 0
+fi
+
+exit 0
+BASH;
+
+        file_put_contents($mockYtDlp, str_replace('__CAPTURE_FILE__', $capturedUrlFile, $script));
+        chmod($mockYtDlp, 0755);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+
+        $this->assertFileExists($capturedUrlFile);
+        $this->assertEquals('https://www.youtube.com/@videos_tab_channel/videos', trim(file_get_contents($capturedUrlFile)));
+
+        unlink($mockYtDlp);
+        unlink($capturedUrlFile);
+    }
+
     public function test_check_channels_marks_permanently_unavailable_videos_as_failed_instead_of_retrying_forever()
     {
         // Regression test: previously, a video whose full metadata fetch failed was never

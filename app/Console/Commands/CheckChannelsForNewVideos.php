@@ -14,6 +14,7 @@ use Illuminate\Console\Command;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Sleep;
+use Illuminate\Support\Str;
 
 #[Signature('app:check-channels {--channel= : Only check the given channel ID instead of every channel}')]
 #[Description('Check for new videos in configured channels and queue downloads')]
@@ -96,7 +97,18 @@ class CheckChannelsForNewVideos extends Command
                 // dump, this doesn't visit each video's watch page (no JS signature solving, no
                 // format list), so it's a single lightweight request regardless of how many of
                 // those videos are already known.
-                $command = escapeshellarg($ytDlp).' --ignore-errors --flat-playlist -j --playlist-items :10 '.escapeshellarg($channel->url).' 2>&1';
+                //
+                // Channel URLs are stored as the bare handle (e.g. .../@channel), which yt-dlp
+                // expands into *every* tab (Videos, Shorts, Live) as separate sub-playlists, each
+                // independently capped by --playlist-items :10 — so the "last 10" easily balloons
+                // past 10 and mixes in Shorts/streams that aren't part of the actual upload order.
+                // Pointing at the /videos tab explicitly keeps this to a single, correctly-ordered
+                // list of the channel's last 10 uploads.
+                $videosTabUrl = rtrim($channel->url, '/');
+                if (! Str::endsWith($videosTabUrl, '/videos')) {
+                    $videosTabUrl .= '/videos';
+                }
+                $command = escapeshellarg($ytDlp).' --ignore-errors --flat-playlist -j --playlist-items :10 '.escapeshellarg($videosTabUrl).' 2>&1';
                 [$output, $resultCode] = $wrapper->runCommand($command, 240);
 
                 $candidateIds = [];
