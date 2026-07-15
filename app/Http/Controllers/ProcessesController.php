@@ -51,6 +51,37 @@ class ProcessesController extends Controller
         return back()->with('status', 'Video removed from the queue.');
     }
 
+    /**
+     * Re-queue every currently-failed video for download (e.g. after an outage that
+     * failed a whole batch at once, such as an IP rate-limit or expired cookies).
+     */
+    public function retryAllFailedVideos()
+    {
+        $count = Video::where('status', 'failed')->count();
+
+        Video::where('status', 'failed')->update([
+            'status' => 'pending',
+            'retries' => 0,
+            'prevent_download' => false,
+            'unavailable_reason' => null,
+            'last_error' => null,
+        ]);
+
+        return back()->with('status', "{$count} failed video(s) re-queued for download.");
+    }
+
+    /**
+     * Permanently remove every currently-failed video from the queue.
+     */
+    public function destroyAllFailedVideos()
+    {
+        $count = Video::where('status', 'failed')->count();
+
+        Video::where('status', 'failed')->delete();
+
+        return back()->with('status', "{$count} failed video(s) removed from the queue.");
+    }
+
     public function destroyJob(int $id)
     {
         DB::table('jobs')->where('id', $id)->delete();

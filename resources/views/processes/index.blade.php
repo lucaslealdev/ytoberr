@@ -79,12 +79,28 @@
 
     <!-- Failed Videos -->
     <div class="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800 mb-8">
-        <h3 class="text-lg font-semibold text-white mb-4">
-            Failed Videos
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-white">
+                Failed Videos
+                @if ($failedVideos->isNotEmpty())
+                    <span class="ml-2 bg-red-600 text-white text-xs rounded-full px-2 py-0.5 align-middle">{{ $failedVideos->count() }}</span>
+                @endif
+            </h3>
+
             @if ($failedVideos->isNotEmpty())
-                <span class="ml-2 bg-red-600 text-white text-xs rounded-full px-2 py-0.5 align-middle">{{ $failedVideos->count() }}</span>
+                <div class="flex items-center gap-3">
+                    <form action="{{ route('processes.failed-videos.retry-all') }}" method="POST">
+                        @csrf
+                        <button type="submit" class="text-green-400 hover:text-green-300 text-xs">Retry All Failed</button>
+                    </form>
+                    <form action="{{ route('processes.failed-videos.destroy-all') }}" method="POST" onsubmit="return confirm('Remove all {{ $failedVideos->count() }} failed videos permanently? This cannot be undone.');">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="text-red-400 hover:text-red-300 text-xs">Delete All Failed</button>
+                    </form>
+                </div>
             @endif
-        </h3>
+        </div>
 
         @if ($failedVideos->isEmpty())
             <p class="text-gray-500 text-sm italic">No failed videos.</p>
