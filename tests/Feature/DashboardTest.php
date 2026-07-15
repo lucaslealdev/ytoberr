@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\Channel;
+use App\Models\Setting;
 use App\Models\User;
 use App\Models\Video;
+use App\Models\Warning;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -126,5 +128,94 @@ class DashboardTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertSee('No videos downloaded yet.');
+    }
+
+    public function test_dashboard_health_panel_shows_pending_failed_and_warning_counts()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_health_chan',
+            'name' => 'Health Channel',
+            'url' => 'https://example.com/health',
+        ]);
+
+        Video::create(['channel_id' => $channel->id, 'youtube_id' => 'health_pending', 'title' => 'Pending', 'published_at' => now(), 'status' => 'pending']);
+        Video::create(['channel_id' => $channel->id, 'youtube_id' => 'health_downloading', 'title' => 'Downloading', 'published_at' => now(), 'status' => 'downloading']);
+        Video::create(['channel_id' => $channel->id, 'youtube_id' => 'health_failed_1', 'title' => 'Failed One', 'published_at' => now(), 'status' => 'failed']);
+        Video::create(['channel_id' => $channel->id, 'youtube_id' => 'health_failed_2', 'title' => 'Failed Two', 'published_at' => now(), 'status' => 'failed']);
+
+        Warning::log('test_source', 'Something went wrong');
+
+        $response = $this->actingAs($user)->get('/');
+
+        $response->assertStatus(200);
+        $response->assertViewHas('pendingVideosCount', 2);
+        $response->assertViewHas('failedVideosCount', 2);
+        $response->assertViewHas('warningsCount', 1);
+        $response->assertSee('System Health');
+    }
+
+    public function test_dashboard_shows_queue_suspended_banner_after_three_consecutive_failures()
+    {
+        $user = User::factory()->create();
+        Setting::set('consecutive_failures', '3');
+
+        $response = $this->actingAs($user)->get('/');
+
+        $response->assertStatus(200);
+        $response->assertViewHas('queueSuspended', true);
+        $response->assertSee('Downloads are currently suspended');
+    }
+
+    public function test_dashboard_hides_queue_suspended_banner_when_healthy()
+    {
+        $user = User::factory()->create();
+        Setting::set('consecutive_failures', '1');
+
+        $response = $this->actingAs($user)->get('/');
+
+        $response->assertStatus(200);
+        $response->assertViewHas('queueSuspended', false);
+        $response->assertDontSee('Downloads are currently suspended');
+    }
+
+    public function test_dashboard_storage_growth_chart_shows_empty_state_with_no_download_history()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get('/');
+
+        $response->assertStatus(200);
+        $response->assertSee('Storage Growth');
+        $response->assertSee('Not enough download history yet to chart storage growth.');
+    }
+
+    public function test_dashboard_storage_growth_chart_renders_when_downloads_exist()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_growth_chan',
+            'name' => 'Growth Channel',
+            'url' => 'https://example.com/growth',
+        ]);
+
+        Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'growth_vid',
+            'title' => 'Growth Video',
+            'published_at' => now(),
+            'status' => 'completed',
+            'downloaded_at' => now(),
+            'file_size' => 5_000_000,
+        ]);
+
+        $response = $this->actingAs($user)->get('/');
+
+        $response->assertStatus(200);
+        $response->assertViewHas('storageGrowthSeries', function ($series) {
+            return count($series) === 30 && end($series)['bytes'] === 5_000_000;
+        });
+        $response->assertDontSee('Not enough download history yet to chart storage growth.');
+        $response->assertSee('<polyline', false);
     }
 }
