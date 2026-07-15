@@ -25,9 +25,14 @@ class YtDlpWrapper
      * on it, leaking an orphaned yt-dlp process that competes with the next attempt for
      * network/CPU and makes it more likely to time out too.
      *
+     * $onOutput, if given, is invoked with each chunk of output as it's produced (Symfony's
+     * `function (string $type, string $buffer)` signature) — used by the download command to
+     * observe yt-dlp's progress in real time without waiting for the whole process to finish.
+     * It's purely an observer: the full output is still buffered and returned as normal.
+     *
      * @return array{0: array<int, string>, 1: int} [output lines, exit code]
      */
-    public function runCommand(string $command, int $timeoutSeconds): array
+    public function runCommand(string $command, int $timeoutSeconds, ?callable $onOutput = null): array
     {
         // The leading "exec" makes the shell replace itself with the command instead of
         // forking a child for it (Symfony only adds this automatically for array-form
@@ -47,7 +52,7 @@ class YtDlpWrapper
         }
 
         try {
-            $process->wait();
+            $process->wait($onOutput);
         } catch (ProcessTimedOutException) {
             if ($pid) {
                 posix_kill(-$pid, SIGKILL);
