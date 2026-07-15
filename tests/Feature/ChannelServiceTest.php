@@ -68,6 +68,10 @@ BASH);
         $this->assertSame('banner bytes', trim(Storage::disk('public')->get("channels/{$channel->id}/fanart.jpg")));
         $this->assertSame('wide bytes', trim(Storage::disk('public')->get("channels/{$channel->id}/banner.jpg")));
 
+        $channel->refresh();
+        $this->assertSame("channels/{$channel->id}/banner.jpg", $channel->banner_path);
+        $this->assertSame("channels/{$channel->id}/fanart.jpg", $channel->fanart_path);
+
         unlink($mockYtDlp);
     }
 
@@ -104,6 +108,12 @@ BASH);
         Storage::disk('public')->assertExists("channels/{$channel->id}/poster.jpg");
         $this->assertSame('large bytes', trim(Storage::disk('public')->get("channels/{$channel->id}/poster.jpg")));
 
+        // Neither thumbnail matched the banner/fanart criteria, so both columns must be
+        // explicitly cleared rather than left unset.
+        $channel->refresh();
+        $this->assertNull($channel->banner_path);
+        $this->assertNull($channel->fanart_path);
+
         unlink($mockYtDlp);
     }
 
@@ -125,6 +135,8 @@ BASH);
 
         $this->assertDatabaseHas('warnings', ['source' => 'channel_images_fetch_failed']);
         Storage::disk('public')->assertMissing("channels/{$channel->id}/poster.jpg");
+        $this->assertNull($channel->fresh()->banner_path);
+        $this->assertNull($channel->fresh()->fanart_path);
 
         unlink($mockYtDlp);
     }
@@ -154,6 +166,8 @@ BASH);
 
         $this->assertDatabaseHas('warnings', ['source' => 'channel_images_fetch_failed']);
         Storage::disk('public')->assertMissing("channels/{$channel->id}/poster.jpg");
+        $this->assertNull($channel->fresh()->banner_path);
+        $this->assertNull($channel->fresh()->fanart_path);
 
         unlink($mockYtDlp);
     }

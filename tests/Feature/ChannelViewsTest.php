@@ -247,6 +247,71 @@ class ChannelViewsTest extends TestCase
         $showResponse->assertSee($expectedSize);
     }
 
+    public function test_channel_index_and_show_pages_render_cover_image_from_stored_banner_and_fanart_paths()
+    {
+        Storage::fake('public');
+
+        $user = User::factory()->create();
+
+        // banner_path/fanart_path are trusted as-is, with no Storage::exists() check against
+        // disk, so the cover renders even though no file was ever put on the fake disk.
+        $bannerChannel = Channel::create([
+            'youtube_id' => 'UC_cover_banner_chan',
+            'name' => 'Cover Banner Channel',
+            'url' => 'https://example.com/coverbanner',
+            'banner_path' => 'channels/999/banner.jpg',
+            'fanart_path' => 'channels/999/fanart.jpg',
+        ]);
+
+        $fanartOnlyChannel = Channel::create([
+            'youtube_id' => 'UC_cover_fanart_chan',
+            'name' => 'Cover Fanart Channel',
+            'url' => 'https://example.com/coverfanart',
+            'fanart_path' => 'channels/998/fanart.jpg',
+        ]);
+
+        $noCoverChannel = Channel::create([
+            'youtube_id' => 'UC_cover_none_chan',
+            'name' => 'Cover None Channel',
+            'url' => 'https://example.com/covernone',
+        ]);
+
+        $indexResponse = $this->actingAs($user)->get('/channels');
+        $indexResponse->assertStatus(200);
+        // Banner takes priority over fanart when both are set.
+        $indexResponse->assertSee("background-image: url('".asset('storage/channels/999/banner.jpg')."')", false);
+        $indexResponse->assertSee("background-image: url('".asset('storage/channels/998/fanart.jpg')."')", false);
+
+        $bannerShowResponse = $this->actingAs($user)->get('/channels/'.$bannerChannel->id);
+        $bannerShowResponse->assertStatus(200);
+        $bannerShowResponse->assertSee("background-image: url('".asset('storage/channels/999/banner.jpg')."')", false);
+
+        $noCoverShowResponse = $this->actingAs($user)->get('/channels/'.$noCoverChannel->id);
+        $noCoverShowResponse->assertStatus(200);
+        $noCoverShowResponse->assertDontSee('background-image', false);
+    }
+
+    public function test_channel_show_page_renders_profile_image_from_stored_path_without_checking_disk()
+    {
+        Storage::fake('public');
+
+        $user = User::factory()->create();
+
+        // profile_image_path is only ever set by the controller after confirming the file
+        // was written, so the show page can trust it without a redundant Storage::exists()
+        // check against disk on every render.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_profile_trust_chan',
+            'name' => 'Profile Trust Channel',
+            'url' => 'https://example.com/profiletrust',
+            'profile_image_path' => 'channels/997/poster.jpg',
+        ]);
+
+        $response = $this->actingAs($user)->get('/channels/'.$channel->id);
+        $response->assertStatus(200);
+        $response->assertSee(asset('storage/channels/997/poster.jpg'), false);
+    }
+
     public function test_channels_index_paginates_at_10_per_page()
     {
         $user = User::factory()->create();
