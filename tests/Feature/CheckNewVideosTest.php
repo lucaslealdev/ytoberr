@@ -134,11 +134,15 @@ BASH;
 
     public function test_check_new_videos_job_has_a_timeout_generous_enough_for_the_configurable_ytdlp_delay()
     {
-        // Regression guard: app:check-channels sleeps up to ytdlp_delay_seconds' max allowed
-        // value (120s, see Settings validation) between its two yt-dlp calls, plus real
-        // network time for each call. The queue worker's default 60s timeout would kill the
-        // job outright before that finishes, silently dropping the check (see production
-        // incident: the job landed in failed_jobs with a TimeoutExceededException).
+        // Regression guard: app:check-channels does a live-status precheck (90s) + a
+        // flat-playlist listing (240s), then one full per-video extraction (240s) for each
+        // of up to 10 newly-discovered videos, with ytdlp_delay_seconds' max allowed value
+        // (120s, see Settings validation) slept between every one of those calls. Worst
+        // case is 90 + 120 + 240 + 10*(120+240) = 4050s. The queue worker's default 60s
+        // timeout — or an earlier, smaller job timeout sized for the old single-call-per-
+        // video-batch design — would kill the job outright before that finishes, silently
+        // dropping the check (see production incident: the job landed in failed_jobs with
+        // a TimeoutExceededException).
         $channel = Channel::create([
             'youtube_id' => 'UC_timeout_chan',
             'name' => 'Timeout Channel',
@@ -147,6 +151,6 @@ BASH;
 
         $job = new CheckChannelForNewVideosJob($channel);
 
-        $this->assertGreaterThanOrEqual(300, $job->timeout);
+        $this->assertGreaterThanOrEqual(4050, $job->timeout);
     }
 }
