@@ -234,6 +234,44 @@ exit 1
         unlink($mockYtDlp);
     }
 
+    public function test_downloader_silently_drops_members_only_videos_without_warning_and_retries_later()
+    {
+        // Regression test: a members-only restriction is not necessarily permanent (the
+        // uploader could grant access later), so unlike Private/Removed it must not be
+        // blacklisted (prevent_download) or warned about — the video row is deleted outright
+        // so a future channel check treats it as unknown again and retries it.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_test_chan',
+            'name' => 'Space Channel',
+            'url' => 'https://example.com/space',
+        ]);
+
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'members_only_vid',
+            'title' => 'Members Only Video',
+            'published_at' => '2026-07-10 12:00:00',
+            'status' => 'pending',
+        ]);
+
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_members_only.sh');
+        file_put_contents($mockYtDlp, <<<'BASH'
+#!/bin/bash
+echo "ERROR: [youtube] members_only_vid: This video is available to this channel's members on level: miserável (or any higher level). Join this channel to get access to members-only content and other exclusive perks."
+exit 1
+BASH);
+        chmod($mockYtDlp, 0755);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('videos:download');
+
+        $this->assertNull(Video::find($video->id));
+        $this->assertDatabaseMissing('warnings', ['video_id' => $video->id]);
+        $this->assertSame('0', Setting::get('consecutive_failures', '0'));
+
+        unlink($mockYtDlp);
+    }
+
     public function test_downloader_suspends_queue_on_three_consecutive_failures()
     {
         $channel = Channel::create([

@@ -175,6 +175,18 @@ class CheckChannelsForNewVideos extends Command
                         $errorOutput = implode("\n", $output);
                         $this->error("Failed to fetch metadata for video: {$videoId}");
 
+                        // Members-only restriction: skip silently, without persisting a video row
+                        // or logging a Warning. Unlike the "genuinely gone" reasons below, access
+                        // could be granted later, so nothing here should ever count as "known" —
+                        // leaving it fully unrecorded is what lets every future channel check
+                        // reconsider it. See DownloadNextVideo::handleFailure() for the same
+                        // reasoning applied to a video that's already in the download queue.
+                        if (Video::isMembersOnlyRestricted($errorOutput)) {
+                            $this->info("Skipping video {$videoId}: members-only content. Will retry on a future channel check.");
+
+                            continue;
+                        }
+
                         // yt-dlp/YouTube's bot-detection (or a JS-runtime hiccup) can produce a
                         // one-off "Video unavailable" response for a video that's actually fine —
                         // observed in practice: a video reported unavailable came back with full

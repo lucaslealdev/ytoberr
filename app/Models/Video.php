@@ -40,8 +40,12 @@ class Video extends Model
 
     /**
      * Inspect yt-dlp error output for signs the video is permanently unavailable (private,
-     * removed, members-only, etc.) rather than a transient failure worth retrying. Returns
-     * a short human-readable reason, or null if the output doesn't match a known pattern.
+     * removed, etc.) rather than a transient failure worth retrying. Returns a short
+     * human-readable reason, or null if the output doesn't match a known pattern.
+     *
+     * Deliberately does NOT cover members-only restrictions — see isMembersOnlyRestricted()
+     * below, which is checked separately and handled quite differently (not a permanent
+     * exclusion, since membership access can change).
      */
     public static function detectUnavailableReason(string $errorOutput): ?string
     {
@@ -53,7 +57,6 @@ class Video extends Model
             'video unavailable',
             'this video is no longer available',
             'this video is unavailable',
-            'members-only content',
         ]);
 
         if (! $isUnavailable) {
@@ -68,11 +71,28 @@ class Video extends Model
             return 'Video removed';
         }
 
-        if (Str::contains($errorOutputLower, 'members-only')) {
-            return 'Members-only content';
-        }
-
         return 'Video is private, removed or unavailable';
+    }
+
+    /**
+     * Whether yt-dlp's error output indicates the video is restricted to the channel's
+     * paying members (e.g. "Join this channel to get access to members-only content", or a
+     * specific membership tier via "available to this channel's members on level: ...").
+     *
+     * Unlike detectUnavailableReason()'s permanent reasons (private/removed), membership
+     * access isn't necessarily permanent — the channel could grant access later, or the
+     * video could eventually go public — so callers treat this as "quietly skip for now and
+     * let a future channel check reconsider it" rather than a permanent exclusion or
+     * something worth warning about.
+     */
+    public static function isMembersOnlyRestricted(string $errorOutput): bool
+    {
+        $errorOutputLower = strtolower($errorOutput);
+
+        return Str::contains($errorOutputLower, [
+            'members-only',
+            "available to this channel's members",
+        ]);
     }
 
     /**
