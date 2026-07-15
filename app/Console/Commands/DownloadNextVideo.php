@@ -223,30 +223,10 @@ class DownloadNextVideo extends Command
      */
     private function handleFailure(Video $video, string $errorOutput): void
     {
-        $errorOutputLower = strtolower($errorOutput);
-
         // 1. Check for permanently unavailable videos (Private, Removed, Unavailable)
-        $isUnavailable = Str::contains($errorOutputLower, [
-            'private video',
-            'this video has been removed',
-            'video unavailable',
-            'this video is no longer available',
-            'this video is unavailable',
-            'members-only content',
-        ]);
+        $reason = Video::detectUnavailableReason($errorOutput);
 
-        if ($isUnavailable) {
-            $reason = 'Video is private, removed or unavailable';
-            if (Str::contains($errorOutputLower, 'private video')) {
-                $reason = 'Private video';
-            }
-            if (Str::contains($errorOutputLower, 'removed')) {
-                $reason = 'Video removed';
-            }
-            if (Str::contains($errorOutputLower, 'members-only')) {
-                $reason = 'Members-only content';
-            }
-
+        if ($reason !== null) {
             $video->update([
                 'status' => 'failed',
                 'prevent_download' => true,
@@ -258,6 +238,8 @@ class DownloadNextVideo extends Command
 
             return;
         }
+
+        $errorOutputLower = strtolower($errorOutput);
 
         // 2. Check for Cookie/Authentication issues
         $needsCookies = Str::contains($errorOutputLower, [

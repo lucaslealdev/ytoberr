@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 class Video extends Model
 {
@@ -35,6 +36,43 @@ class Video extends Model
     public function channel(): BelongsTo
     {
         return $this->belongsTo(Channel::class);
+    }
+
+    /**
+     * Inspect yt-dlp error output for signs the video is permanently unavailable (private,
+     * removed, members-only, etc.) rather than a transient failure worth retrying. Returns
+     * a short human-readable reason, or null if the output doesn't match a known pattern.
+     */
+    public static function detectUnavailableReason(string $errorOutput): ?string
+    {
+        $errorOutputLower = strtolower($errorOutput);
+
+        $isUnavailable = Str::contains($errorOutputLower, [
+            'private video',
+            'this video has been removed',
+            'video unavailable',
+            'this video is no longer available',
+            'this video is unavailable',
+            'members-only content',
+        ]);
+
+        if (! $isUnavailable) {
+            return null;
+        }
+
+        if (Str::contains($errorOutputLower, 'private video')) {
+            return 'Private video';
+        }
+
+        if (Str::contains($errorOutputLower, 'removed')) {
+            return 'Video removed';
+        }
+
+        if (Str::contains($errorOutputLower, 'members-only')) {
+            return 'Members-only content';
+        }
+
+        return 'Video is private, removed or unavailable';
     }
 
     /**

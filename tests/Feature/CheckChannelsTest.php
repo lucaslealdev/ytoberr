@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Channel;
 use App\Models\Setting;
 use App\Models\Video;
+use App\Models\Warning;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -348,6 +349,64 @@ exit 1
         Artisan::call('app:check-channels', ['--channel' => $channel->id]);
 
         $this->assertDatabaseHas('warnings', ['source' => 'channel_check_failed']);
+
+        unlink($mockYtDlp);
+    }
+
+    public function test_check_channels_marks_permanently_unavailable_videos_as_failed_instead_of_retrying_forever()
+    {
+        // Regression test: previously, a video whose full metadata fetch failed was never
+        // persisted, so it kept reappearing as a "new" candidate on every run (every 3 hours,
+        // forever) and kept generating identical video_check_failed warnings.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_unavailable_chan',
+            'name' => 'Unavailable Video Channel',
+            'url' => 'https://www.youtube.com/@unavailable_channel',
+            'download_quality' => '720p',
+        ]);
+
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_unavailable.sh');
+        file_put_contents($mockYtDlp, <<<'BASH'
+#!/bin/bash
+if [[ "$*" == *"--print-to-file"* ]]; then
+    args=("$@")
+    for i in "${!args[@]}"; do
+        if [[ "${args[$i]}" == "--print-to-file" ]]; then
+            outfile="${args[$((i+2))]}"
+            echo '{"live_status": null}' > "$outfile"
+            exit 0
+        fi
+    done
+fi
+
+if [[ "$*" == *"--flat-playlist"* ]]; then
+    echo '{"id":"i__XFWFch_s","title":"Old Video"}'
+    exit 0
+fi
+
+echo "ERROR: [youtube] i__XFWFch_s: Video unavailable. This video is not available"
+exit 1
+BASH);
+        chmod($mockYtDlp, 0755);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+
+        $video = Video::where('youtube_id', 'i__XFWFch_s')->first();
+        $this->assertNotNull($video, 'A failed placeholder video row should have been created for the unavailable video.');
+        $this->assertEquals('failed', $video->status);
+        $this->assertTrue((bool) $video->prevent_download);
+        $this->assertNotNull($video->unavailable_reason);
+
+        $this->assertDatabaseHas('warnings', [
+            'source' => 'video_check_failed',
+            'video_id' => $video->id,
+        ]);
+
+        // Running the check again must not re-attempt the now-known video: it's excluded by
+        // the existence check before the expensive per-video fetch ever happens again.
+        Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+        $this->assertEquals(1, Warning::where('source', 'video_check_failed')->count());
 
         unlink($mockYtDlp);
     }
