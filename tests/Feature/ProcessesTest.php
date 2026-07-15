@@ -218,6 +218,158 @@ class ProcessesTest extends TestCase
         $this->assertDatabaseHas('videos', ['id' => $video->id]);
     }
 
+    public function test_can_retry_all_failed_videos_from_the_processes_page()
+    {
+        Setting::set('advanced_mode', '1');
+        $user = User::factory()->create();
+
+        $channel = Channel::create(['youtube_id' => 'UC_retry_all_failed', 'name' => 'X', 'url' => 'https://example.com/retryall']);
+
+        $failedOne = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'retry_all_failed_vid_1',
+            'title' => 'Failed Video 1',
+            'published_at' => now(),
+            'status' => 'failed',
+            'retries' => 3,
+            'prevent_download' => true,
+            'unavailable_reason' => 'Rate limited',
+            'last_error' => 'HTTP Error 429: Too Many Requests',
+        ]);
+
+        $failedTwo = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'retry_all_failed_vid_2',
+            'title' => 'Failed Video 2',
+            'published_at' => now(),
+            'status' => 'failed',
+            'retries' => 1,
+            'last_error' => 'Cookies expired',
+        ]);
+
+        $pending = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'retry_all_failed_pending_vid',
+            'title' => 'Untouched Pending Video',
+            'published_at' => now(),
+            'status' => 'pending',
+        ]);
+
+        $completed = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'retry_all_failed_completed_vid',
+            'title' => 'Untouched Completed Video',
+            'published_at' => now(),
+            'status' => 'completed',
+        ]);
+
+        $response = $this->actingAs($user)->post(route('processes.failed-videos.retry-all'));
+
+        $response->assertRedirect();
+
+        foreach ([$failedOne, $failedTwo] as $video) {
+            $this->assertDatabaseHas('videos', [
+                'id' => $video->id,
+                'status' => 'pending',
+                'retries' => 0,
+                'prevent_download' => false,
+                'unavailable_reason' => null,
+                'last_error' => null,
+            ]);
+        }
+
+        $this->assertDatabaseHas('videos', ['id' => $pending->id, 'status' => 'pending']);
+        $this->assertDatabaseHas('videos', ['id' => $completed->id, 'status' => 'completed']);
+    }
+
+    public function test_can_delete_all_failed_videos_from_the_processes_page()
+    {
+        Setting::set('advanced_mode', '1');
+        $user = User::factory()->create();
+
+        $channel = Channel::create(['youtube_id' => 'UC_delete_all_failed', 'name' => 'X', 'url' => 'https://example.com/deleteall']);
+
+        $failedOne = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'delete_all_failed_vid_1',
+            'title' => 'Failed Video 1',
+            'published_at' => now(),
+            'status' => 'failed',
+        ]);
+
+        $failedTwo = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'delete_all_failed_vid_2',
+            'title' => 'Failed Video 2',
+            'published_at' => now(),
+            'status' => 'failed',
+        ]);
+
+        $pending = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'delete_all_failed_pending_vid',
+            'title' => 'Untouched Pending Video',
+            'published_at' => now(),
+            'status' => 'pending',
+        ]);
+
+        $downloading = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'delete_all_failed_downloading_vid',
+            'title' => 'Untouched Downloading Video',
+            'published_at' => now(),
+            'status' => 'downloading',
+        ]);
+
+        $response = $this->actingAs($user)->delete(route('processes.failed-videos.destroy-all'));
+
+        $response->assertRedirect();
+        $this->assertDatabaseMissing('videos', ['id' => $failedOne->id]);
+        $this->assertDatabaseMissing('videos', ['id' => $failedTwo->id]);
+        $this->assertDatabaseHas('videos', ['id' => $pending->id]);
+        $this->assertDatabaseHas('videos', ['id' => $downloading->id]);
+    }
+
+    public function test_failed_videos_bulk_actions_are_shown_when_a_failed_video_exists()
+    {
+        Setting::set('advanced_mode', '1');
+        $user = User::factory()->create();
+
+        $channel = Channel::create(['youtube_id' => 'UC_bulk_actions_shown', 'name' => 'X', 'url' => 'https://example.com/bulkshown']);
+        Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'bulk_actions_shown_vid',
+            'title' => 'Failed Video',
+            'published_at' => now(),
+            'status' => 'failed',
+        ]);
+
+        $response = $this->actingAs($user)->get('/processes');
+
+        $response->assertSee('Retry All Failed');
+        $response->assertSee('Delete All Failed');
+    }
+
+    public function test_failed_videos_bulk_actions_are_hidden_when_there_are_no_failed_videos()
+    {
+        Setting::set('advanced_mode', '1');
+        $user = User::factory()->create();
+
+        $channel = Channel::create(['youtube_id' => 'UC_bulk_actions_hidden', 'name' => 'X', 'url' => 'https://example.com/bulkhidden']);
+        Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'bulk_actions_hidden_vid',
+            'title' => 'Pending Video',
+            'published_at' => now(),
+            'status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($user)->get('/processes');
+
+        $response->assertDontSee('Retry All Failed');
+        $response->assertDontSee('Delete All Failed');
+    }
+
     public function test_can_cancel_a_queued_job_from_the_processes_page()
     {
         Setting::set('advanced_mode', '1');
