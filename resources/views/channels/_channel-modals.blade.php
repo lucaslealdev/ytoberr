@@ -73,8 +73,6 @@
     </div>
 </div>
 
-<p id="channel-action-toast" class="hidden fixed bottom-6 right-6 z-50 text-sm text-white bg-gray-800 border border-gray-700 rounded px-4 py-2 shadow-xl"></p>
-
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         function closeAllDropdowns(except) {
@@ -85,16 +83,10 @@
             });
         }
 
-        function showToast(message, isError) {
-            const toast = document.getElementById('channel-action-toast');
-            toast.textContent = message;
-            toast.classList.toggle('text-red-400', Boolean(isError));
-            toast.classList.remove('hidden');
-            clearTimeout(showToast._timer);
-            showToast._timer = setTimeout(function () {
-                toast.classList.add('hidden');
-            }, 3000);
-        }
+        // showToast(message, isError) itself now lives in components/flash-toast.blade.php,
+        // included once by the layout, so it's shared with session('status') flashes instead
+        // of this partial keeping its own separate toast element/implementation.
+        const showToast = window.showToast;
 
         // --- Kebab dropdowns (delegated: any number of cards can exist on the page) ---
         document.addEventListener('click', function (event) {
