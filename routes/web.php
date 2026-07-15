@@ -52,6 +52,8 @@ Route::middleware('auth')->group(function () {
     Route::middleware(EnsureAdvancedModeEnabled::class)->group(function () {
         Route::get('/processes', [ProcessesController::class, 'index'])->name('processes.index');
         Route::delete('/processes/videos/{video}', [ProcessesController::class, 'destroyVideo'])->name('processes.videos.destroy');
+        Route::post('/processes/failed-videos/retry-all', [ProcessesController::class, 'retryAllFailedVideos'])->name('processes.failed-videos.retry-all');
+        Route::delete('/processes/failed-videos', [ProcessesController::class, 'destroyAllFailedVideos'])->name('processes.failed-videos.destroy-all');
         Route::delete('/processes/jobs/{id}', [ProcessesController::class, 'destroyJob'])->name('processes.jobs.destroy');
         Route::post('/processes/failed-jobs/{uuid}/retry', [ProcessesController::class, 'retryFailedJob'])->name('processes.failed-jobs.retry');
         Route::delete('/processes/failed-jobs/{uuid}', [ProcessesController::class, 'destroyFailedJob'])->name('processes.failed-jobs.destroy');
