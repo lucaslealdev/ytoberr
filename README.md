@@ -131,6 +131,15 @@ stopwaitsecs=3600
 
 *(Adjust the `user`, absolute paths, and logs according to your server's environment permissions).*
 
+## ⚡ Performance: Concurrent Access & Video Streaming
+
+The web server (both in Docker and in a manual `php artisan serve` setup) runs on a fixed pool of workers, sized by `PHP_CLI_SERVER_WORKERS` (default `12`, set in the Dockerfile/`.env.example`). Every request — including large video files streamed by the player/download routes — occupies one worker for the whole duration, and a single video being watched or downloaded can open several concurrent Range requests while scrubbing.
+
+For a self-hosted/small-household install this is usually plenty, but if you expect several people to browse the dashboard while others are watching or downloading videos at the same time, consider:
+
+- Raising `PHP_CLI_SERVER_WORKERS` further (each worker adds some memory overhead).
+- Fronting the container with a real reverse proxy (nginx, Caddy, Traefik, etc.), which can serve large files far more efficiently than tying up a PHP worker for the whole transfer.
+
 ## 🙏 Credits
 
 This project only exists by standing on the shoulders of giants:
