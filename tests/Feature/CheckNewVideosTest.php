@@ -7,6 +7,7 @@ use App\Models\Channel;
 use App\Models\Setting;
 use App\Models\User;
 use App\Models\Video;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -152,5 +153,55 @@ BASH;
         $job = new CheckChannelForNewVideosJob($channel);
 
         $this->assertGreaterThanOrEqual(4050, $job->timeout);
+    }
+
+    public function test_check_new_videos_job_reports_a_stable_unique_id_keyed_by_channel()
+    {
+        // ShouldBeUnique, keyed by channel ID via uniqueId(), is what stops Laravel's queue
+        // layer from ever dispatching two instances of this job for the *same* channel at
+        // once (e.g. a repeat click of "Check for New Videos" while one is still queued).
+        // Note this only protects this queued-job path — it can't see the *scheduled*
+        // app:check-channels sweep, which doesn't go through this job at all; that race is
+        // closed separately by the per-channel Cache::lock inside
+        // CheckChannelsForNewVideos::handle().
+        $channelA = Channel::create([
+            'youtube_id' => 'UC_unique_id_chan_a',
+            'name' => 'Unique ID Channel A',
+            'url' => 'https://example.com/uniqueidchana',
+        ]);
+        $channelB = Channel::create([
+            'youtube_id' => 'UC_unique_id_chan_b',
+            'name' => 'Unique ID Channel B',
+            'url' => 'https://example.com/uniqueidchanb',
+        ]);
+
+        $jobA = new CheckChannelForNewVideosJob($channelA);
+        $jobAAgain = new CheckChannelForNewVideosJob($channelA);
+        $jobB = new CheckChannelForNewVideosJob($channelB);
+
+        $this->assertInstanceOf(ShouldBeUnique::class, $jobA);
+        $this->assertSame((string) $channelA->id, $jobA->uniqueId());
+        $this->assertSame($jobA->uniqueId(), $jobAAgain->uniqueId());
+        $this->assertNotSame($jobA->uniqueId(), $jobB->uniqueId());
+    }
+
+    public function test_check_new_videos_endpoint_does_not_double_queue_the_job_for_the_same_channel()
+    {
+        Queue::fake();
+
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_double_click_chan',
+            'name' => 'Double Click Channel',
+            'url' => 'https://example.com/doubleclick',
+        ]);
+
+        // Two rapid clicks of "Check for New Videos" on the same channel must not both land
+        // in the queue: the job's ShouldBeUnique lock (keyed by channel ID) makes the second
+        // dispatch() a silent no-op while the first is still pending.
+        $this->actingAs($user)->postJson("/channels/{$channel->id}/check-new-videos");
+        $this->actingAs($user)->postJson("/channels/{$channel->id}/check-new-videos");
+
+        Queue::assertPushed(CheckChannelForNewVideosJob::class, 1);
     }
 }
