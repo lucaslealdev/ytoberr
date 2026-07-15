@@ -202,6 +202,31 @@ class SettingsControllerTest extends TestCase
         $this->assertSame(1, Warning::count());
     }
 
+    public function test_can_clear_all_warnings_at_once()
+    {
+        $user = User::factory()->create();
+        Warning::log('queue_suspended', 'Suspending all pending downloads.');
+        Warning::log('channel_check_failed', 'Failed to check channel: Some Channel');
+
+        $indexResponse = $this->actingAs($user)->get('/settings');
+        $indexResponse->assertSee('Clear all');
+
+        $response = $this->actingAs($user)->delete('/settings/warnings');
+
+        $response->assertRedirect();
+        $this->assertSame(0, Warning::count());
+    }
+
+    public function test_clear_all_button_is_hidden_when_there_are_no_warnings()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get('/settings');
+
+        $response->assertStatus(200);
+        $response->assertDontSee('Clear all');
+    }
+
     public function test_warning_linked_to_a_video_shows_a_retry_download_button()
     {
         $user = User::factory()->create();

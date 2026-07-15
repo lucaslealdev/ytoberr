@@ -43,6 +43,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/settings/clean-missing-videos', [SettingsController::class, 'cleanMissingVideos']);
     Route::post('/settings/reset-cache', [SettingsController::class, 'resetCache']);
     Route::delete('/settings/warnings/{warning}', [SettingsController::class, 'deleteWarning'])->name('settings.warnings.delete');
+    Route::delete('/settings/warnings', [SettingsController::class, 'clearWarnings'])->name('settings.warnings.clear-all');
     Route::post('/settings/backups', [SettingsController::class, 'createBackup'])->name('settings.backups.create');
     Route::get('/settings/backups/{filename}/download', [SettingsController::class, 'downloadBackup'])->where('filename', '.*')->name('settings.backups.download');
     Route::delete('/settings/backups/{filename}', [SettingsController::class, 'deleteBackup'])->where('filename', '.*')->name('settings.backups.delete');
