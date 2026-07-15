@@ -34,7 +34,7 @@
 
         <div class="p-6 flex flex-col md:flex-row items-center md:items-end gap-6 {{ $coverUrl ? '-mt-16 md:-mt-20' : '' }} relative z-10">
             @if ($channel->profile_image_path)
-                <img src="{{ asset('storage/' . $channel->profile_image_path) }}" alt="{{ $channel->name }}" class="w-24 h-24 md:w-32 md:h-32 rounded-full border-4 border-gray-900 object-cover shadow-2xl bg-gray-900">
+                <img src="{{ $channel->profileImageUrl() }}" alt="{{ $channel->name }}" class="w-24 h-24 md:w-32 md:h-32 rounded-full border-4 border-gray-900 object-cover shadow-2xl bg-gray-900">
             @else
                 <div class="w-24 h-24 md:w-32 md:h-32 rounded-full border-4 border-gray-900 bg-gray-800 flex items-center justify-center text-gray-500 text-3xl font-bold shadow-2xl">?</div>
             @endif

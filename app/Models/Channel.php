@@ -84,17 +84,35 @@ class Channel extends Model
      * neither was found. Backed by the stored banner_path/fanart_path columns rather than
      * a live Storage::exists() check, since both are set once by ChannelService when the
      * images are downloaded instead of being stat'd on every page render.
+     *
+     * Routed through MediaController::showPublicDisk() (rather than the public/storage
+     * symlink directly) so the response carries a long-lived Cache-Control header — see that
+     * method's docblock for why the symlink alone can't do this on this app's PHP built-in
+     * server setup.
      */
     public function coverImageUrl(): ?string
     {
         if ($this->banner_path) {
-            return asset('storage/'.$this->banner_path);
+            return route('media.channel.show', ['path' => $this->banner_path]);
         }
 
         if ($this->fanart_path) {
-            return asset('storage/'.$this->fanart_path);
+            return route('media.channel.show', ['path' => $this->fanart_path]);
         }
 
         return null;
+    }
+
+    /**
+     * URL for the channel's profile image (avatar), or null if it isn't set. Same
+     * cache-header rationale as coverImageUrl() above.
+     */
+    public function profileImageUrl(): ?string
+    {
+        if (! $this->profile_image_path) {
+            return null;
+        }
+
+        return route('media.channel.show', ['path' => $this->profile_image_path]);
     }
 }

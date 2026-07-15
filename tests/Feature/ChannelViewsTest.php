@@ -402,12 +402,12 @@ class ChannelViewsTest extends TestCase
         $indexResponse = $this->actingAs($user)->get('/channels');
         $indexResponse->assertStatus(200);
         // Banner takes priority over fanart when both are set.
-        $indexResponse->assertSee("background-image: url('".asset('storage/channels/999/banner.jpg')."')", false);
-        $indexResponse->assertSee("background-image: url('".asset('storage/channels/998/fanart.jpg')."')", false);
+        $indexResponse->assertSee("background-image: url('".route('media.channel.show', ['path' => 'channels/999/banner.jpg'])."')", false);
+        $indexResponse->assertSee("background-image: url('".route('media.channel.show', ['path' => 'channels/998/fanart.jpg'])."')", false);
 
         $bannerShowResponse = $this->actingAs($user)->get('/channels/'.$bannerChannel->id);
         $bannerShowResponse->assertStatus(200);
-        $bannerShowResponse->assertSee("background-image: url('".asset('storage/channels/999/banner.jpg')."')", false);
+        $bannerShowResponse->assertSee("background-image: url('".route('media.channel.show', ['path' => 'channels/999/banner.jpg'])."')", false);
 
         $noCoverShowResponse = $this->actingAs($user)->get('/channels/'.$noCoverChannel->id);
         $noCoverShowResponse->assertStatus(200);
@@ -432,7 +432,7 @@ class ChannelViewsTest extends TestCase
 
         $response = $this->actingAs($user)->get('/channels/'.$channel->id);
         $response->assertStatus(200);
-        $response->assertSee(asset('storage/channels/997/poster.jpg'), false);
+        $response->assertSee(route('media.channel.show', ['path' => 'channels/997/poster.jpg']), false);
     }
 
     public function test_channels_index_search_returns_only_matching_channels()

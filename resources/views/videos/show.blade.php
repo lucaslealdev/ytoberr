@@ -43,8 +43,8 @@
                 <div class="flex flex-wrap items-center gap-3 text-sm text-gray-400 mb-4">
                     @if ($video->channel)
                         <a href="/channels/{{ $video->channel->id }}" class="flex items-center gap-2 hover:text-white transition duration-200">
-                            @if ($video->channel->profile_image_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($video->channel->profile_image_path))
-                                <img src="{{ asset('storage/' . $video->channel->profile_image_path) }}" alt="{{ $video->channel->name }}" class="w-8 h-8 rounded-full object-cover">
+                            @if ($video->channel->profileImageUrl())
+                                <img src="{{ $video->channel->profileImageUrl() }}" alt="{{ $video->channel->name }}" class="w-8 h-8 rounded-full object-cover">
                             @endif
                             <span class="font-semibold text-gray-200">{{ $video->channel->name }}</span>
                         </a>

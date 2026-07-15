@@ -75,7 +75,7 @@
                 <div class="flex items-center gap-4 relative z-10">
                     <a href="/channels/{{ $channel->id }}" class="hover:opacity-80 transition duration-200">
                         @if ($channel->profile_image_path)
-                            <img src="{{ asset('storage/' . $channel->profile_image_path) }}" alt="{{ $channel->name }}" class="w-12 h-12 rounded-full object-cover" loading="lazy">
+                            <img src="{{ $channel->profileImageUrl() }}" alt="{{ $channel->name }}" class="w-12 h-12 rounded-full object-cover" loading="lazy">
                         @else
                             <div class="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center text-gray-500">?</div>
                         @endif
