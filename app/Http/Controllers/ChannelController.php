@@ -61,6 +61,13 @@ class ChannelController extends Controller
         $channelId = $data['channel_id'] ?? 'unknown_'.uniqid();
         $localThumbnailPath = null;
 
+        $existingChannel = Channel::where('youtube_id', $channelId)->first();
+        if ($existingChannel) {
+            return redirect('/channels')->withErrors([
+                'url' => "This channel is already registered as \"{$existingChannel->name}\".",
+            ]);
+        }
+
         try {
             $channel = Channel::create([
                 'youtube_id' => $channelId,
