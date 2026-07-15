@@ -38,7 +38,7 @@ class VideoController extends Controller
                 break;
         }
 
-        $videos = $query->paginate(10)->withQueryString();
+        $videos = $query->paginate(12)->withQueryString();
 
         return view('videos.index', compact('videos', 'search', 'sort'));
     }
