@@ -20,16 +20,7 @@
     <!-- Channel Header Banner -->
     <div data-channel-card class="relative bg-gray-900 rounded-lg shadow-lg border border-gray-800 mb-8">
         @php
-            $bannerPath = 'channels/' . $channel->id . '/banner.jpg';
-            $fanartPath = 'channels/' . $channel->id . '/fanart.jpg';
-            $hasBanner = \Illuminate\Support\Facades\Storage::disk('public')->exists($bannerPath);
-            $hasFanart = \Illuminate\Support\Facades\Storage::disk('public')->exists($fanartPath);
-            $coverUrl = null;
-            if ($hasBanner) {
-                $coverUrl = asset('storage/' . $bannerPath);
-            } elseif ($hasFanart) {
-                $coverUrl = asset('storage/' . $fanartPath);
-            }
+            $coverUrl = $channel->coverImageUrl();
         @endphp
 
         {{-- overflow-hidden/rounding lives on the cover itself (not the outer card) so the
@@ -48,7 +39,7 @@
         </div>
 
         <div class="p-6 flex flex-col md:flex-row items-center md:items-end gap-6 {{ $coverUrl ? '-mt-16 md:-mt-20' : '' }} relative z-10">
-            @if ($channel->profile_image_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($channel->profile_image_path))
+            @if ($channel->profile_image_path)
                 <img src="{{ asset('storage/' . $channel->profile_image_path) }}" alt="{{ $channel->name }}" class="w-24 h-24 md:w-32 md:h-32 rounded-full border-4 border-gray-900 object-cover shadow-2xl bg-gray-900">
             @else
                 <div class="w-24 h-24 md:w-32 md:h-32 rounded-full border-4 border-gray-900 bg-gray-800 flex items-center justify-center text-gray-500 text-3xl font-bold shadow-2xl">?</div>
