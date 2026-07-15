@@ -116,8 +116,31 @@ class CheckChannelsForNewVideos extends Command
                 }
 
                 if (! $metadata) {
+                    $errorOutput = implode("\n", $output);
                     $this->error("Failed to fetch metadata for video: {$videoId}");
-                    Warning::log('video_check_failed', "Failed to fetch metadata for video: {$videoId}", implode("\n", $output));
+
+                    // Without persisting a row here, a permanently unavailable video (deleted,
+                    // private, etc.) would never leave the "not yet known" candidate list, so
+                    // every future run (every 3 hours, forever) would re-fetch and fail the
+                    // same way — see the video_check_failed warning this used to spam.
+                    $reason = Video::detectUnavailableReason($errorOutput);
+
+                    if ($reason !== null) {
+                        $video = Video::create([
+                            'channel_id' => $channel->id,
+                            'youtube_id' => $videoId,
+                            'title' => "Unavailable video ({$videoId})",
+                            'published_at' => now(),
+                            'status' => 'failed',
+                            'prevent_download' => true,
+                            'unavailable_reason' => $reason,
+                            'last_error' => 'Permanently unavailable: '.$reason,
+                        ]);
+                        $this->warn("Video {$videoId} marked as permanently unavailable: {$reason}");
+                        Warning::log('video_check_failed', "Failed to fetch metadata for video: {$videoId}", $errorOutput, $video->id);
+                    } else {
+                        Warning::log('video_check_failed', "Failed to fetch metadata for video: {$videoId}", $errorOutput);
+                    }
 
                     continue;
                 }
