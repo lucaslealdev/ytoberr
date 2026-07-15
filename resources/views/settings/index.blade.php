@@ -258,12 +258,21 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
     <!-- Warnings Section -->
     <div class="mt-8 bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800">
-        <h3 class="text-lg font-semibold text-white mb-4">
-            Warnings
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-white">
+                Warnings
+                @if ($warnings->isNotEmpty())
+                    <span class="ml-2 bg-red-600 text-white text-xs rounded-full px-2 py-0.5 align-middle">{{ $warnings->count() }}</span>
+                @endif
+            </h3>
             @if ($warnings->isNotEmpty())
-                <span class="ml-2 bg-red-600 text-white text-xs rounded-full px-2 py-0.5 align-middle">{{ $warnings->count() }}</span>
+                <form action="{{ route('settings.warnings.clear-all') }}" method="POST" onsubmit="return confirm('Clear all {{ $warnings->count() }} warnings? This cannot be undone.');">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="text-gray-400 hover:text-white text-xs">Clear all</button>
+                </form>
             @endif
-        </h3>
+        </div>
 
         @if ($warnings->isEmpty())
             <p class="text-gray-500 text-sm italic">No warnings. Everything looks healthy.</p>

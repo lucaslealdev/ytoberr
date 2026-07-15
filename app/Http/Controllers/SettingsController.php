@@ -207,6 +207,15 @@ class SettingsController extends Controller
         return back()->with('status', 'Warning dismissed.');
     }
 
+    public function clearWarnings()
+    {
+        $count = Warning::count();
+
+        Warning::query()->delete();
+
+        return back()->with('status', "{$count} warning(s) cleared.");
+    }
+
     public function createBackup(BackupService $backups)
     {
         $filename = $backups->create();
