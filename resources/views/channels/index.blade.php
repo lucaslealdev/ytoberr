@@ -55,16 +55,7 @@
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         @forelse ($channels as $channel)
             @php
-                $bannerPath = 'channels/' . $channel->id . '/banner.jpg';
-                $fanartPath = 'channels/' . $channel->id . '/fanart.jpg';
-                $hasBanner = \Illuminate\Support\Facades\Storage::disk('public')->exists($bannerPath);
-                $hasFanart = \Illuminate\Support\Facades\Storage::disk('public')->exists($fanartPath);
-                $coverUrl = null;
-                if ($hasBanner) {
-                    $coverUrl = asset('storage/' . $bannerPath);
-                } elseif ($hasFanart) {
-                    $coverUrl = asset('storage/' . $fanartPath);
-                }
+                $coverUrl = $channel->coverImageUrl();
             @endphp
             {{-- overflow-hidden/rounding lives on the cover wrapper (not the card itself) so the
                  kebab dropdown below isn't clipped when it overflows past the card's height. --}}

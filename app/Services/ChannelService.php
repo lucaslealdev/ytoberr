@@ -115,6 +115,13 @@ class ChannelService
             }
         }
 
+        // Persist which images actually landed on disk so views can trust these columns
+        // instead of stat-ing banner.jpg/fanart.jpg on every render.
+        $channel->update([
+            'banner_path' => $processedImages['banner'] ?? null,
+            'fanart_path' => $processedImages['fanart'] ?? null,
+        ]);
+
         Log::info("Channel images processed for {$channel->name}: ".json_encode($processedImages));
 
         $this->cleanup($tempDir);
