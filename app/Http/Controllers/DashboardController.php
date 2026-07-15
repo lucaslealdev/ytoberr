@@ -10,7 +10,7 @@ class DashboardController extends Controller
     public function index()
     {
         $channelsCount = Channel::count();
-        $videosCount = Video::count();
+        $videosCount = Video::where('status', 'completed')->count();
 
         $recentVideos = Video::with('channel')
             ->where('status', 'completed')

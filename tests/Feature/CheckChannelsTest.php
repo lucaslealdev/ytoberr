@@ -243,11 +243,15 @@ BASH;
         // 1. Assert that the console output indicates videos that were live were skipped
         $this->assertStringContainsString('Originated from a live stream', $output, 'No recorded live was skipped or reported in the output.');
 
-        // 2. Assert that recorded-live videos were skipped and NOT saved to the database
+        // 2. Assert that recorded-live videos were skipped, and persisted as excluded (not
+        // queued for download, and not re-checked on a future run) rather than left out of the
+        // database entirely.
         foreach ($liveIds as $liveId) {
             $this->assertStringContainsString("Skipping video {$liveId}", $output);
-            $this->assertDatabaseMissing('videos', [
+            $this->assertDatabaseHas('videos', [
                 'youtube_id' => $liveId,
+                'status' => 'excluded',
+                'prevent_download' => true,
             ]);
         }
 
@@ -282,11 +286,14 @@ BASH;
 
         $this->assertStringContainsString('YouTube Short', $output, 'No Short was skipped or reported in the output.');
 
-        // Shorts must be skipped and not saved to the database.
+        // Shorts must be skipped, and persisted as excluded (not queued for download, and not
+        // re-checked on a future run) rather than left out of the database entirely.
         foreach ($shortIds as $shortId) {
             $this->assertStringContainsString("Skipping video {$shortId}: YouTube Short.", $output);
-            $this->assertDatabaseMissing('videos', [
+            $this->assertDatabaseHas('videos', [
                 'youtube_id' => $shortId,
+                'status' => 'excluded',
+                'prevent_download' => true,
             ]);
         }
 
@@ -327,6 +334,48 @@ BASH;
         }
 
         $this->assertStringNotContainsString('YouTube Short', $output, 'A Short was skipped even with download_shorts enabled.');
+
+        unlink($mockYtDlp);
+    }
+
+    public function test_check_channels_persists_pre_cutoff_videos_as_excluded_instead_of_re_checking_them_forever()
+    {
+        // Regression test: a candidate published before the channel's cut-off date was
+        // previously never persisted, so it kept sitting in the last-10 uploads and paying for
+        // a full yt-dlp extraction every single run (every 3 hours), forever.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_pre_cutoff_chan',
+            'name' => 'Pre Cutoff Channel',
+            'url' => 'https://www.youtube.com/@pre_cutoff_channel',
+            'download_quality' => '720p',
+            'cutoff_date' => '2026-07-01',
+        ]);
+
+        $videos = [[
+            'id' => 'old_vid',
+            'title' => 'Old Video',
+            'upload_date' => '20260601',
+            'was_live' => false,
+            'media_type' => null,
+        ]];
+
+        $mockYtDlp = $this->mockYtDlpWithVideos('pre_cutoff_channel', $videos);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+
+        $output = Artisan::output();
+        $this->assertStringContainsString('published before channel cut-off date', $output);
+        $this->assertDatabaseHas('videos', [
+            'youtube_id' => 'old_vid',
+            'status' => 'excluded',
+            'prevent_download' => true,
+        ]);
+
+        // A second run must not re-attempt the now-known video: it's excluded by the existence
+        // check before the expensive per-video fetch ever happens again.
+        Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+        $this->assertStringNotContainsString('old_vid', Artisan::output());
 
         unlink($mockYtDlp);
     }
