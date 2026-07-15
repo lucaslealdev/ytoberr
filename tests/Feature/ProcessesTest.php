@@ -443,4 +443,244 @@ class ProcessesTest extends TestCase
         $this->assertDatabaseMissing('failed_jobs', ['uuid' => $uuid]);
         $this->assertDatabaseMissing('jobs', ['queue' => 'default']);
     }
+
+    public function test_pending_videos_list_is_paginated_to_ten_per_page()
+    {
+        Setting::set('advanced_mode', '1');
+        $user = User::factory()->create();
+
+        $channel = Channel::create(['youtube_id' => 'UC_paginate_pending', 'name' => 'X', 'url' => 'https://example.com/paginate-pending']);
+
+        $labels = array_map(fn ($n) => sprintf('%02d', $n), range(1, 15));
+
+        foreach ($labels as $i => $label) {
+            $video = Video::create([
+                'channel_id' => $channel->id,
+                'youtube_id' => "pending_page_vid_{$label}",
+                'title' => "PendVid{$label}",
+                'published_at' => now(),
+                'status' => 'pending',
+            ]);
+
+            DB::table('videos')->where('id', $video->id)->update(['created_at' => now()->addMinutes($i)]);
+        }
+
+        $firstPage = $this->actingAs($user)->get('/processes');
+        $firstPage->assertStatus(200);
+        foreach (array_slice($labels, 0, 10) as $label) {
+            $firstPage->assertSee("PendVid{$label}");
+        }
+        foreach (array_slice($labels, 10) as $label) {
+            $firstPage->assertDontSee("PendVid{$label}");
+        }
+
+        $secondPage = $this->actingAs($user)->get('/processes?pending_page=2');
+        $secondPage->assertStatus(200);
+        foreach (array_slice($labels, 10) as $label) {
+            $secondPage->assertSee("PendVid{$label}");
+        }
+        foreach (array_slice($labels, 0, 10) as $label) {
+            $secondPage->assertDontSee("PendVid{$label}");
+        }
+    }
+
+    public function test_failed_videos_list_is_paginated_to_ten_per_page()
+    {
+        Setting::set('advanced_mode', '1');
+        $user = User::factory()->create();
+
+        $channel = Channel::create(['youtube_id' => 'UC_paginate_failed', 'name' => 'X', 'url' => 'https://example.com/paginate-failed']);
+
+        $labels = array_map(fn ($n) => sprintf('%02d', $n), range(1, 15));
+
+        foreach ($labels as $i => $label) {
+            $video = Video::create([
+                'channel_id' => $channel->id,
+                'youtube_id' => "failed_page_vid_{$label}",
+                'title' => "FailVid{$label}",
+                'published_at' => now(),
+                'status' => 'failed',
+            ]);
+
+            DB::table('videos')->where('id', $video->id)->update(['updated_at' => now()->addMinutes(14 - $i)]);
+        }
+
+        $firstPage = $this->actingAs($user)->get('/processes');
+        $firstPage->assertStatus(200);
+        foreach (array_slice($labels, 0, 10) as $label) {
+            $firstPage->assertSee("FailVid{$label}");
+        }
+        foreach (array_slice($labels, 10) as $label) {
+            $firstPage->assertDontSee("FailVid{$label}");
+        }
+
+        $secondPage = $this->actingAs($user)->get('/processes?failed_videos_page=2');
+        $secondPage->assertStatus(200);
+        foreach (array_slice($labels, 10) as $label) {
+            $secondPage->assertSee("FailVid{$label}");
+        }
+        foreach (array_slice($labels, 0, 10) as $label) {
+            $secondPage->assertDontSee("FailVid{$label}");
+        }
+    }
+
+    public function test_queued_jobs_list_is_paginated_to_ten_per_page()
+    {
+        Setting::set('advanced_mode', '1');
+        config(['queue.default' => 'database']);
+        $user = User::factory()->create();
+
+        $labels = array_map(fn ($n) => sprintf('%02d', $n), range(1, 15));
+        $baseTimestamp = now()->timestamp;
+
+        foreach ($labels as $i => $label) {
+            DB::table('jobs')->insert([
+                'queue' => 'default',
+                'payload' => json_encode(['displayName' => "App\\Jobs\\QueueJob{$label}"]),
+                'attempts' => 0,
+                'reserved_at' => null,
+                'available_at' => $baseTimestamp,
+                'created_at' => $baseTimestamp + $i,
+            ]);
+        }
+
+        $firstPage = $this->actingAs($user)->get('/processes');
+        $firstPage->assertStatus(200);
+        foreach (array_slice($labels, 0, 10) as $label) {
+            $firstPage->assertSee("QueueJob{$label}");
+        }
+        foreach (array_slice($labels, 10) as $label) {
+            $firstPage->assertDontSee("QueueJob{$label}");
+        }
+
+        $secondPage = $this->actingAs($user)->get('/processes?jobs_page=2');
+        $secondPage->assertStatus(200);
+        foreach (array_slice($labels, 10) as $label) {
+            $secondPage->assertSee("QueueJob{$label}");
+        }
+        foreach (array_slice($labels, 0, 10) as $label) {
+            $secondPage->assertDontSee("QueueJob{$label}");
+        }
+    }
+
+    public function test_failed_jobs_list_is_paginated_to_ten_per_page()
+    {
+        Setting::set('advanced_mode', '1');
+        config(['queue.default' => 'database']);
+        $user = User::factory()->create();
+
+        $labels = array_map(fn ($n) => sprintf('%02d', $n), range(1, 15));
+
+        foreach ($labels as $i => $label) {
+            DB::table('failed_jobs')->insert([
+                'uuid' => "failed-job-paginate-{$label}",
+                'connection' => 'database',
+                'queue' => 'default',
+                'payload' => json_encode(['displayName' => "App\\Jobs\\FailedJob{$label}"]),
+                'exception' => "Exception: FailedJob{$label} blew up.",
+                'failed_at' => now()->addMinutes(14 - $i),
+            ]);
+        }
+
+        $firstPage = $this->actingAs($user)->get('/processes');
+        $firstPage->assertStatus(200);
+        foreach (array_slice($labels, 0, 10) as $label) {
+            $firstPage->assertSee("FailedJob{$label}");
+        }
+        foreach (array_slice($labels, 10) as $label) {
+            $firstPage->assertDontSee("FailedJob{$label}");
+        }
+
+        $secondPage = $this->actingAs($user)->get('/processes?failed_jobs_page=2');
+        $secondPage->assertStatus(200);
+        foreach (array_slice($labels, 10) as $label) {
+            $secondPage->assertSee("FailedJob{$label}");
+        }
+        foreach (array_slice($labels, 0, 10) as $label) {
+            $secondPage->assertDontSee("FailedJob{$label}");
+        }
+    }
+
+    public function test_paginating_one_list_does_not_reset_the_others()
+    {
+        Setting::set('advanced_mode', '1');
+        config(['queue.default' => 'database']);
+        $user = User::factory()->create();
+
+        $channel = Channel::create(['youtube_id' => 'UC_paginate_independence', 'name' => 'X', 'url' => 'https://example.com/paginate-independence']);
+
+        $labels = array_map(fn ($n) => sprintf('%02d', $n), range(1, 15));
+        $baseTimestamp = now()->timestamp;
+
+        foreach ($labels as $i => $label) {
+            $pending = Video::create([
+                'channel_id' => $channel->id,
+                'youtube_id' => "indep_pending_vid_{$label}",
+                'title' => "PendVid{$label}",
+                'published_at' => now(),
+                'status' => 'pending',
+            ]);
+            DB::table('videos')->where('id', $pending->id)->update(['created_at' => now()->addMinutes($i)]);
+
+            $failed = Video::create([
+                'channel_id' => $channel->id,
+                'youtube_id' => "indep_failed_vid_{$label}",
+                'title' => "FailVid{$label}",
+                'published_at' => now(),
+                'status' => 'failed',
+            ]);
+            DB::table('videos')->where('id', $failed->id)->update(['updated_at' => now()->addMinutes(14 - $i)]);
+
+            DB::table('jobs')->insert([
+                'queue' => 'default',
+                'payload' => json_encode(['displayName' => "App\\Jobs\\QueueJob{$label}"]),
+                'attempts' => 0,
+                'reserved_at' => null,
+                'available_at' => $baseTimestamp,
+                'created_at' => $baseTimestamp + $i,
+            ]);
+
+            DB::table('failed_jobs')->insert([
+                'uuid' => "indep-failed-job-{$label}",
+                'connection' => 'database',
+                'queue' => 'default',
+                'payload' => json_encode(['displayName' => "App\\Jobs\\FailedJob{$label}"]),
+                'exception' => "Exception: FailedJob{$label} blew up.",
+                'failed_at' => now()->addMinutes(14 - $i),
+            ]);
+        }
+
+        // Pending videos to page 2, failed jobs to page 2, while failed videos and queued
+        // jobs are left on the (implicit) first page of their own independent paginators.
+        $response = $this->actingAs($user)->get('/processes?pending_page=2&failed_jobs_page=2');
+        $response->assertStatus(200);
+
+        foreach (array_slice($labels, 10) as $label) {
+            $response->assertSee("PendVid{$label}");
+        }
+        foreach (array_slice($labels, 0, 10) as $label) {
+            $response->assertDontSee("PendVid{$label}");
+        }
+
+        foreach (array_slice($labels, 0, 10) as $label) {
+            $response->assertSee("FailVid{$label}");
+        }
+        foreach (array_slice($labels, 10) as $label) {
+            $response->assertDontSee("FailVid{$label}");
+        }
+
+        foreach (array_slice($labels, 0, 10) as $label) {
+            $response->assertSee("QueueJob{$label}");
+        }
+        foreach (array_slice($labels, 10) as $label) {
+            $response->assertDontSee("QueueJob{$label}");
+        }
+
+        foreach (array_slice($labels, 10) as $label) {
+            $response->assertSee("FailedJob{$label}");
+        }
+        foreach (array_slice($labels, 0, 10) as $label) {
+            $response->assertDontSee("FailedJob{$label}");
+        }
+    }
 }
