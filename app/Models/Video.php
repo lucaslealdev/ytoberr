@@ -91,6 +91,26 @@ class Video extends Model
     }
 
     /**
+     * The video's publish time, converted from UTC storage to the app's configured display timezone.
+     */
+    public function publishedAtLocal(): ?Carbon
+    {
+        return $this->published_at
+            ? Carbon::parse($this->published_at, 'UTC')->setTimezone(config('app.display_timezone'))
+            : null;
+    }
+
+    /**
+     * The time this video finished downloading, converted from UTC storage to the app's configured display timezone.
+     */
+    public function downloadedAtLocal(): ?Carbon
+    {
+        return $this->downloaded_at
+            ? Carbon::parse($this->downloaded_at, 'UTC')->setTimezone(config('app.display_timezone'))
+            : null;
+    }
+
+    /**
      * Size in bytes of the locally-saved video file, or null if it isn't set or the file is missing on disk.
      */
     public function fileSize(): ?int

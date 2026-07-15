@@ -146,6 +146,40 @@ class VideoShowTest extends TestCase
         exec('rm -rf '.escapeshellarg($downloadsDir.'/Details Channel'));
     }
 
+    public function test_video_show_page_converts_publish_and_download_times_to_the_configured_display_timezone()
+    {
+        // Storage is always UTC; only display should shift with app.display_timezone
+        // (sourced from the TZ env var — see config/app.php).
+        config(['app.display_timezone' => 'America/Sao_Paulo']);
+
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_tz_chan',
+            'name' => 'Timezone Channel',
+            'url' => 'https://example.com/timezone',
+        ]);
+
+        $publishedAt = Carbon::create(2026, 7, 10, 14, 30, 0, 'UTC');
+        $downloadedAt = Carbon::create(2026, 7, 10, 15, 0, 0, 'UTC');
+
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'tz_vid',
+            'title' => 'Timezone Video',
+            'published_at' => $publishedAt,
+            'status' => 'completed',
+            'downloaded_at' => $downloadedAt,
+        ]);
+
+        $response = $this->actingAs($user)->get('/videos/'.$video->id);
+
+        $response->assertStatus(200);
+        // Sao Paulo is UTC-3: 14:30 -> 11:30, 15:00 -> 12:00.
+        $response->assertSee('11:30 AM');
+        $response->assertSee('12:00 PM');
+        $response->assertDontSee('2:30 PM');
+    }
+
     public function test_video_without_file_shows_unavailable_message_instead_of_player()
     {
         $user = User::factory()->create();

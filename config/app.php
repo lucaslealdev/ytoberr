@@ -82,6 +82,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Display Timezone
+    |--------------------------------------------------------------------------
+    |
+    | All timestamps are stored in UTC (the "timezone" setting above stays
+    | fixed so that storage, queue, and cache internals never shift). This is
+    | the timezone videos' publish/download times are converted to only when
+    | rendered in the UI, sourced from the same TZ container env var already
+    | used to set the OS-level timezone (see docker-compose.yml).
+    |
+    */
+
+    'display_timezone' => env('TZ', 'UTC'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------
     |
