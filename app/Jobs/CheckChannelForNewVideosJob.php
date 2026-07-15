@@ -3,11 +3,12 @@
 namespace App\Jobs;
 
 use App\Models\Channel;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Artisan;
 
-class CheckChannelForNewVideosJob implements ShouldQueue
+class CheckChannelForNewVideosJob implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 
@@ -24,11 +25,35 @@ class CheckChannelForNewVideosJob implements ShouldQueue
     public int $timeout = 4500;
 
     /**
+     * Safety net matching $timeout above: if the job somehow never reaches completion or
+     * failure (e.g. the worker process is killed outright) so the unique lock never gets
+     * released normally, it still won't outlive the job it was guarding by more than a
+     * negligible margin.
+     */
+    public int $uniqueFor = 4500;
+
+    /**
      * Create a new job instance.
      */
     public function __construct(public Channel $channel)
     {
         //
+    }
+
+    /**
+     * Unique per channel: Laravel's queue layer won't dispatch a second instance of this
+     * job for the same channel while one is already queued/running, so repeat clicks of
+     * "Check for New Videos" for the same channel can't both end up processing it — and
+     * potentially duplicate-inserting its videos — at once.
+     *
+     * This only protects the queued-job path: it has no visibility into the scheduled
+     * app:check-channels sweep, which runs synchronously across every channel rather than
+     * through this job. That race is instead closed by the per-channel cache lock inside
+     * CheckChannelsForNewVideos::handle() itself.
+     */
+    public function uniqueId(): string
+    {
+        return (string) $this->channel->id;
     }
 
     /**
