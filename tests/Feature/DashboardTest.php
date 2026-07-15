@@ -61,6 +61,53 @@ class DashboardTest extends TestCase
         $this->assertTrue(strpos($content, 'Newer Video') < strpos($content, 'Older Video'));
     }
 
+    public function test_archived_videos_count_only_includes_completed_videos()
+    {
+        // Regression test: 'excluded' rows (Shorts/before-cutoff/live-originated candidates
+        // persisted purely so they aren't re-checked forever) and queue rows (pending/failed)
+        // must not inflate the "Archived Videos" stat — it should reflect what's actually
+        // been downloaded, matching the Recent Videos list below it.
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_archived_count_chan',
+            'name' => 'Archived Count Channel',
+            'url' => 'https://example.com/archivedcount',
+        ]);
+
+        Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'completed_vid',
+            'title' => 'Completed Video',
+            'published_at' => now(),
+            'status' => 'completed',
+            'downloaded_at' => now(),
+        ]);
+
+        Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'pending_vid',
+            'title' => 'Pending Video',
+            'published_at' => now(),
+            'status' => 'pending',
+        ]);
+
+        Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'excluded_vid',
+            'title' => 'Excluded Short',
+            'published_at' => now(),
+            'status' => 'excluded',
+            'prevent_download' => true,
+            'unavailable_reason' => 'YouTube Short (not enabled for this channel)',
+        ]);
+
+        $response = $this->actingAs($user)->get('/');
+
+        $response->assertStatus(200);
+        $response->assertViewHas('videosCount', 1);
+        $this->assertSame(3, Video::count());
+    }
+
     public function test_dashboard_footer_shows_the_application_version()
     {
         $user = User::factory()->create();

@@ -178,7 +178,7 @@ class CheckChannelsForNewVideos extends Command
                                 ->count();
 
                             if ($priorFailures >= 2) {
-                                $video = Video::create([
+                                $video = $this->createVideoOrSkipDuplicate([
                                     'channel_id' => $channel->id,
                                     'youtube_id' => $videoId,
                                     'title' => "Unavailable video ({$videoId})",
@@ -187,9 +187,9 @@ class CheckChannelsForNewVideos extends Command
                                     'prevent_download' => true,
                                     'unavailable_reason' => $reason,
                                     'last_error' => 'Permanently unavailable: '.$reason,
-                                ]);
+                                ], $videoId);
                                 $this->warn("Video {$videoId} marked as permanently unavailable after {$priorFailures} prior failed checks: {$reason}");
-                                Warning::log('video_check_failed', "Failed to fetch metadata for video: {$videoId}", $errorOutput, $video->id);
+                                Warning::log('video_check_failed', "Failed to fetch metadata for video: {$videoId}", $errorOutput, $video?->id);
 
                                 continue;
                             }
@@ -203,18 +203,6 @@ class CheckChannelsForNewVideos extends Command
                     $wasLive = $metadata['was_live'] ?? false;
                     $mediaType = $metadata['media_type'] ?? null;
 
-                    if ($mediaType === 'short' && ! $channel->download_shorts) {
-                        $this->info("Skipping video {$videoId}: YouTube Short.");
-
-                        continue;
-                    }
-
-                    if ($wasLive) {
-                        $this->info("Skipping video {$videoId}: Originated from a live stream.");
-
-                        continue;
-                    }
-
                     // Prefer the Unix epoch 'timestamp' field, which carries the actual publish
                     // time; 'upload_date' is day-only (YYYYMMDD) and would otherwise collapse
                     // every video into a fake midnight, losing the real order of same-day uploads.
@@ -224,42 +212,86 @@ class CheckChannelsForNewVideos extends Command
                             ? Carbon::parse($metadata['upload_date'])
                             : now());
 
+                    // A candidate rejected below (Short, live-originated, before cut-off) is
+                    // persisted with status 'excluded' rather than just skipped in memory — the
+                    // outcome can never change on a future run, so without a row here it would sit
+                    // in the channel's last-10 uploads and pay for this same full extraction every
+                    // 3 hours, forever. 'excluded' (not 'failed') keeps it out of the Processes
+                    // page's failed-video queue, so "Retry All Failed" can never resurrect it.
+                    $excludedAttributes = [
+                        'channel_id' => $channel->id,
+                        'youtube_id' => $videoId,
+                        'title' => $metadata['title'] ?? 'Unknown Title',
+                        'description' => $metadata['description'] ?? null,
+                        'published_at' => $publishedAt->toDateTimeString(),
+                        'duration' => $metadata['duration'] ?? null,
+                        'status' => 'excluded',
+                        'prevent_download' => true,
+                    ];
+
+                    if ($mediaType === 'short' && ! $channel->download_shorts) {
+                        $this->info("Skipping video {$videoId}: YouTube Short.");
+                        $this->createVideoOrSkipDuplicate($excludedAttributes + ['unavailable_reason' => 'YouTube Short (not enabled for this channel)'], $videoId);
+
+                        continue;
+                    }
+
+                    if ($wasLive) {
+                        $this->info("Skipping video {$videoId}: Originated from a live stream.");
+                        $this->createVideoOrSkipDuplicate($excludedAttributes + ['unavailable_reason' => 'Originated from a live stream'], $videoId);
+
+                        continue;
+                    }
+
                     // Check if the video was published before the channel's cut-off date (cutoff_date)
 
                     if ($channel->cutoff_date && $publishedAt->lt(Carbon::parse($channel->cutoff_date))) {
                         $this->info("Skipping video {$videoId}: published before channel cut-off date ({$channel->cutoff_date}).");
+                        $this->createVideoOrSkipDuplicate($excludedAttributes + ['unavailable_reason' => "Published before channel cut-off date ({$channel->cutoff_date})"], $videoId);
 
                         continue;
                     }
 
                     $this->info("New video found: {$videoId}. Adding to database download queue.");
 
-                    try {
-                        Video::create([
-                            'channel_id' => $channel->id,
-                            'youtube_id' => $videoId,
-                            'title' => $metadata['title'] ?? 'Unknown Title',
-                            'description' => $metadata['description'] ?? null,
-                            'published_at' => $publishedAt->toDateTimeString(),
-                            'duration' => $metadata['duration'] ?? null,
-                            'status' => 'pending',
-                        ]);
-                    } catch (UniqueConstraintViolationException $e) {
-                        // Defense in depth: the per-channel lock above closes the race between
-                        // this command and a manually-queued job for the *same* channel, but it
-                        // can't stop a video appearing twice within this very batch (e.g. a
-                        // flat-playlist listing quirk), nor any other genuinely unforeseen race.
-                        // Either way, one already-known duplicate should never crash the rest of
-                        // this channel's — or the whole run's — processing.
-                        $message = "Video {$videoId} was already inserted (likely a duplicate check-in-progress elsewhere); skipping.";
-                        $this->warn($message);
-                        Warning::log('video_duplicate_insert_skipped', $message, $e->getMessage());
-                    }
+                    $this->createVideoOrSkipDuplicate([
+                        'channel_id' => $channel->id,
+                        'youtube_id' => $videoId,
+                        'title' => $metadata['title'] ?? 'Unknown Title',
+                        'description' => $metadata['description'] ?? null,
+                        'published_at' => $publishedAt->toDateTimeString(),
+                        'duration' => $metadata['duration'] ?? null,
+                        'status' => 'pending',
+                    ], $videoId);
                 }
             } finally {
                 $lock->release();
             }
         }
         $this->info('Done.');
+    }
+
+    /**
+     * Persist a Video row, swallowing a unique-constraint violation as a no-op duplicate.
+     *
+     * Defense in depth: the per-channel lock in handle() closes the race between this command
+     * and a manually-queued job for the *same* channel, but it can't stop a video appearing
+     * twice within this very batch (e.g. a flat-playlist listing quirk), nor any other
+     * genuinely unforeseen race. Either way, one already-known duplicate should never crash the
+     * rest of this channel's — or the whole run's — processing.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private function createVideoOrSkipDuplicate(array $attributes, string $videoId): ?Video
+    {
+        try {
+            return Video::create($attributes);
+        } catch (UniqueConstraintViolationException $e) {
+            $message = "Video {$videoId} was already inserted (likely a duplicate check-in-progress elsewhere); skipping.";
+            $this->warn($message);
+            Warning::log('video_duplicate_insert_skipped', $message, $e->getMessage());
+
+            return null;
+        }
     }
 }
