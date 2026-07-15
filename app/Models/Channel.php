@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Channel extends Model
 {
-    protected $fillable = ['youtube_id', 'name', 'url', 'profile_image_path', 'download_quality', 'cutoff_date', 'description', 'download_shorts'];
+    protected $fillable = ['youtube_id', 'name', 'url', 'profile_image_path', 'banner_path', 'fanart_path', 'download_quality', 'cutoff_date', 'description', 'download_shorts'];
 
     protected static function booted()
     {
@@ -41,5 +41,24 @@ class Channel extends Model
             ->sum(fn (Video $video) => $video->fileSize() ?? 0);
 
         return $knownBytes + $unknownBytes;
+    }
+
+    /**
+     * URL for the channel's cover image (banner takes priority over fanart), or null if
+     * neither was found. Backed by the stored banner_path/fanart_path columns rather than
+     * a live Storage::exists() check, since both are set once by ChannelService when the
+     * images are downloaded instead of being stat'd on every page render.
+     */
+    public function coverImageUrl(): ?string
+    {
+        if ($this->banner_path) {
+            return asset('storage/'.$this->banner_path);
+        }
+
+        if ($this->fanart_path) {
+            return asset('storage/'.$this->fanart_path);
+        }
+
+        return null;
     }
 }
