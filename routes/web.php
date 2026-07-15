@@ -24,9 +24,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/channels', [ChannelController::class, 'index']);
     Route::get('/channels/{channel}', [ChannelController::class, 'show']);
     Route::post('/channels', [ChannelController::class, 'store'])->name('channels.store');
-    Route::patch('/channels/{channel}/settings', [ChannelController::class, 'updateSettings']);
+    Route::patch('/channels/{channel}/settings', [ChannelController::class, 'updateSettings'])->name('channels.settings.update');
     Route::post('/channels/{channel}/check-new-videos', [ChannelController::class, 'checkNewVideos'])->name('channels.check-new-videos');
-    Route::delete('/channels/{channel}', [ChannelController::class, 'destroy']);
+    Route::delete('/channels/{channel}', [ChannelController::class, 'destroy'])->name('channels.destroy');
     Route::get('/videos', [VideoController::class, 'index']);
     Route::get('/videos/{video}', [VideoController::class, 'show']);
     Route::post('/videos/{video}/retry', [VideoController::class, 'retry'])->name('videos.retry');

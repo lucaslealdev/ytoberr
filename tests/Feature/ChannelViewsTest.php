@@ -68,11 +68,100 @@ class ChannelViewsTest extends TestCase
         $response->assertSee('name="download_shorts"', false);
         $response->assertSee('Download Shorts');
 
-        // Unchecked by default.
+        // The shared settings modal's checkbox is always static/unchecked in the markup — its
+        // real per-channel state is read from the card's data-download-shorts attribute and
+        // applied by JS when the modal opens, so that's what must reflect the true value.
+        $response->assertSee('data-download-shorts="0"', false);
         $this->assertDoesNotMatchRegularExpression(
             '/name="download_shorts"[^>]*checked/',
             $response->getContent()
         );
+    }
+
+    public function test_channel_actions_card_data_attributes_reflect_true_channel_settings()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_data_attrs_chan',
+            'name' => 'Data Attrs Channel',
+            'url' => 'https://example.com/dataattrs',
+            'download_quality' => '1080p',
+            'cutoff_date' => '2026-02-01',
+            'download_shorts' => true,
+        ]);
+
+        $response = $this->actingAs($user)->get('/channels/'.$channel->id);
+
+        $response->assertStatus(200);
+        $response->assertSee('data-channel-id="'.$channel->id.'"', false);
+        $response->assertSee('data-quality="1080p"', false);
+        $response->assertSee('data-cutoff-date="2026-02-01"', false);
+        $response->assertSee('data-download-shorts="1"', false);
+    }
+
+    public function test_channels_index_shows_channel_actions_kebab_per_card_with_a_single_shared_modal()
+    {
+        $user = User::factory()->create();
+        $channelA = Channel::create([
+            'youtube_id' => 'UC_index_actions_a',
+            'name' => 'Index Actions Channel A',
+            'url' => 'https://example.com/indexactionsa',
+            'download_quality' => '480p',
+        ]);
+        $channelB = Channel::create([
+            'youtube_id' => 'UC_index_actions_b',
+            'name' => 'Index Actions Channel B',
+            'url' => 'https://example.com/indexactionsb',
+            'download_quality' => '1080p',
+        ]);
+
+        $response = $this->actingAs($user)->get('/channels');
+        $response->assertStatus(200);
+
+        $content = $response->getContent();
+
+        // Each card carries its own channel-specific data-attributes...
+        $response->assertSee('data-channel-id="'.$channelA->id.'"', false);
+        $response->assertSee('data-channel-id="'.$channelB->id.'"', false);
+        $response->assertSee('data-quality="480p"', false);
+        $response->assertSee('data-quality="1080p"', false);
+
+        // ...but the settings/delete modals are rendered exactly once for the whole page,
+        // not duplicated per card.
+        $this->assertSame(1, substr_count($content, 'id="channel-settings-modal"'));
+        $this->assertSame(1, substr_count($content, 'id="delete-channel-modal"'));
+    }
+
+    public function test_channel_settings_update_returns_json_for_async_requests()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_json_settings_chan',
+            'name' => 'Json Settings Channel',
+            'url' => 'https://example.com/jsonsettings',
+            'download_quality' => '720p',
+        ]);
+
+        $response = $this->actingAs($user)->patchJson('/channels/'.$channel->id.'/settings', [
+            'quality' => '1080p',
+            'cutoff_date' => '2026-03-01',
+            'download_shorts' => '1',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'channel' => [
+                'id' => $channel->id,
+                'cutoff_date' => '2026-03-01',
+                'download_quality' => '1080p',
+                'download_shorts' => true,
+            ],
+        ]);
+
+        $channel->refresh();
+        $this->assertEquals('1080p', $channel->download_quality);
+        $this->assertEquals('2026-03-01', $channel->cutoff_date);
+        $this->assertTrue((bool) $channel->download_shorts);
     }
 
     public function test_download_shorts_preference_can_be_updated_from_the_channel_show_page()
