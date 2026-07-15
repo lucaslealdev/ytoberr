@@ -47,7 +47,7 @@ class ChannelController extends Controller
                 break;
         }
 
-        $channels = $query->with('videos')->paginate(10)->withQueryString();
+        $channels = $query->with('videos')->paginate(18)->withQueryString();
 
         return view('channels.index', compact('channels', 'sort', 'search'));
     }
