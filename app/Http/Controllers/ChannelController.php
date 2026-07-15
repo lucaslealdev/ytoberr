@@ -17,8 +17,19 @@ class ChannelController extends Controller
 {
     public function index(Request $request)
     {
+        $search = trim((string) $request->query('search', ''));
         $sort = $request->query('sort', 'name');
         $query = Channel::query();
+
+        if ($search !== '') {
+            // Columns are qualified with the channels. prefix because the recent_video
+            // sort below left-joins videos, whose youtube_id column would otherwise be
+            // ambiguous.
+            $query->where(function ($subQuery) use ($search) {
+                $subQuery->where('channels.name', 'like', '%'.$search.'%')
+                    ->orWhere('channels.youtube_id', 'like', '%'.$search.'%');
+            });
+        }
 
         switch ($sort) {
             case 'recent_video':
@@ -38,7 +49,7 @@ class ChannelController extends Controller
 
         $channels = $query->with('videos')->paginate(10)->withQueryString();
 
-        return view('channels.index', compact('channels', 'sort'));
+        return view('channels.index', compact('channels', 'sort', 'search'));
     }
 
     public function store(Request $request)

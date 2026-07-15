@@ -43,13 +43,20 @@
         });
     </script>
 
-    <div class="mb-6 flex gap-2 items-center text-sm">
-        <span class="text-gray-400">Order by:</span>
-        <select onchange="window.location.href='?sort='+this.value" class="bg-gray-800 text-gray-100 p-2 rounded border border-gray-700 cursor-pointer">
-            <option value="name" {{ $sort === 'name' ? 'selected' : '' }}>Name (A-Z)</option>
-            <option value="recent_video" {{ $sort === 'recent_video' ? 'selected' : '' }}>Recent Video</option>
-            <option value="created_at" {{ $sort === 'created_at' ? 'selected' : '' }}>Added Date</option>
-        </select>
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <form action="/channels" method="GET" class="flex-1 min-w-[200px]">
+            <input type="hidden" name="sort" value="{{ $sort }}">
+            <input type="search" name="search" value="{{ $search }}" placeholder="Search channels by name..." class="w-full max-w-sm p-2 bg-gray-800 border border-gray-700 rounded text-gray-100 text-sm">
+        </form>
+
+        <div class="flex gap-2 items-center text-sm">
+            <span class="text-gray-400">Order by:</span>
+            <select onchange="window.location.href='?search={{ urlencode($search) }}&amp;sort='+this.value" class="bg-gray-800 text-gray-100 p-2 rounded border border-gray-700 cursor-pointer">
+                <option value="name" {{ $sort === 'name' ? 'selected' : '' }}>Name (A-Z)</option>
+                <option value="recent_video" {{ $sort === 'recent_video' ? 'selected' : '' }}>Recent Video</option>
+                <option value="created_at" {{ $sort === 'created_at' ? 'selected' : '' }}>Added Date</option>
+            </select>
+        </div>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -93,7 +100,11 @@
             </div>
         @empty
             <div class="col-span-full p-8 bg-gray-900 rounded-lg text-center text-gray-400">
-                No channels registered yet.
+                @if ($search !== '')
+                    No channels found for &quot;{{ $search }}&quot;.
+                @else
+                    No channels registered yet.
+                @endif
             </div>
         @endforelse
     </div>
