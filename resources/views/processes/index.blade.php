@@ -36,8 +36,8 @@
     <div class="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800 mb-8">
         <h3 class="text-lg font-semibold text-white mb-4">
             Pending Downloads
-            @if ($pendingVideos->isNotEmpty())
-                <span class="ml-2 bg-blue-600 text-white text-xs rounded-full px-2 py-0.5 align-middle">{{ $pendingVideos->count() }}</span>
+            @if ($pendingVideos->total() > 0)
+                <span class="ml-2 bg-blue-600 text-white text-xs rounded-full px-2 py-0.5 align-middle">{{ $pendingVideos->total() }}</span>
             @endif
         </h3>
 
@@ -74,6 +74,8 @@
                     </tbody>
                 </table>
             </div>
+
+            {{ $pendingVideos->links('components.pagination') }}
         @endif
     </div>
 
@@ -81,8 +83,8 @@
     <div class="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800 mb-8">
         <h3 class="text-lg font-semibold text-white mb-4">
             Failed Videos
-            @if ($failedVideos->isNotEmpty())
-                <span class="ml-2 bg-red-600 text-white text-xs rounded-full px-2 py-0.5 align-middle">{{ $failedVideos->count() }}</span>
+            @if ($failedVideos->total() > 0)
+                <span class="ml-2 bg-red-600 text-white text-xs rounded-full px-2 py-0.5 align-middle">{{ $failedVideos->total() }}</span>
             @endif
         </h3>
 
@@ -133,6 +135,8 @@
                     </tbody>
                 </table>
             </div>
+
+            {{ $failedVideos->links('components.pagination') }}
         @endif
     </div>
 
@@ -140,8 +144,8 @@
     <div class="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800 mb-8">
         <h3 class="text-lg font-semibold text-white mb-4">
             Queued Jobs
-            @if ($jobs->isNotEmpty())
-                <span class="ml-2 bg-blue-600 text-white text-xs rounded-full px-2 py-0.5 align-middle">{{ $jobs->count() }}</span>
+            @if ($jobs->total() > 0)
+                <span class="ml-2 bg-blue-600 text-white text-xs rounded-full px-2 py-0.5 align-middle">{{ $jobs->total() }}</span>
             @endif
         </h3>
 
@@ -189,6 +193,8 @@
                     </tbody>
                 </table>
             </div>
+
+            {{ $jobs->links('components.pagination') }}
         @endif
     </div>
 
@@ -196,8 +202,8 @@
     <div class="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800">
         <h3 class="text-lg font-semibold text-white mb-4">
             Failed Jobs
-            @if ($failedJobs->isNotEmpty())
-                <span class="ml-2 bg-red-600 text-white text-xs rounded-full px-2 py-0.5 align-middle">{{ $failedJobs->count() }}</span>
+            @if ($failedJobs->total() > 0)
+                <span class="ml-2 bg-red-600 text-white text-xs rounded-full px-2 py-0.5 align-middle">{{ $failedJobs->total() }}</span>
             @endif
         </h3>
 
@@ -237,6 +243,8 @@
                     </div>
                 @endforeach
             </div>
+
+            {{ $failedJobs->links('components.pagination') }}
         @endif
     </div>
 @endsection
