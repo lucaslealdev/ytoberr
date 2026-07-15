@@ -18,24 +18,35 @@ class ProcessesController extends Controller
         $pendingVideos = Video::with('channel')
             ->where('status', 'pending')
             ->orderBy('created_at')
-            ->get();
+            ->paginate(10, ['*'], 'pending_page')
+            ->withQueryString();
 
         $failedVideos = Video::with('channel')
             ->where('status', 'failed')
             ->orderBy('updated_at', 'desc')
-            ->get();
+            ->paginate(10, ['*'], 'failed_videos_page')
+            ->withQueryString();
 
         $jobs = DB::table('jobs')
             ->orderBy('created_at')
-            ->get()
-            ->map(fn ($job) => $this->describeJob($job));
+            ->paginate(10, ['*'], 'jobs_page')
+            ->withQueryString()
+            ->through(fn ($job) => $this->describeJob($job));
 
         $failedJobs = DB::table('failed_jobs')
             ->orderBy('failed_at', 'desc')
-            ->get()
-            ->map(fn ($job) => $this->describeFailedJob($job));
+            ->paginate(10, ['*'], 'failed_jobs_page')
+            ->withQueryString()
+            ->through(fn ($job) => $this->describeFailedJob($job));
 
-        $checkingChannel = $jobs->first(fn (array $job) => $job['isChannelCheck'] && $job['reserved']);
+        // The reserved channel-check job (if any) drives the "Live Activity" banner. This is
+        // looked up independently of the paginated $jobs list above, since the reserved job
+        // may not be on whichever page of the queue the user currently has open.
+        $checkingChannel = DB::table('jobs')
+            ->whereNotNull('reserved_at')
+            ->get()
+            ->map(fn ($job) => $this->describeJob($job))
+            ->first(fn (array $job) => $job['isChannelCheck']);
 
         return view('processes.index', compact(
             'downloadingVideo', 'pendingVideos', 'failedVideos', 'jobs', 'failedJobs', 'checkingChannel'
