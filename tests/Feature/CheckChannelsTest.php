@@ -578,6 +578,58 @@ BASH);
         unlink($mockYtDlp);
     }
 
+    public function test_check_channels_skips_upcoming_premieres_silently_and_keeps_retrying_indefinitely()
+    {
+        // Regression test: a scheduled premiere that hasn't gone live yet ("Premieres in 43
+        // minutes") isn't a real failure — yt-dlp simply can't extract formats until it airs —
+        // so like the members-only case, it must never be persisted as a known/excluded row,
+        // must never generate a Warning, and must keep being reconsidered on every future
+        // channel check.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_premiere_chan',
+            'name' => 'Premiere Channel',
+            'url' => 'https://www.youtube.com/@premiere_channel',
+            'download_quality' => '720p',
+        ]);
+
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_premiere_check.sh');
+        file_put_contents($mockYtDlp, <<<'BASH'
+#!/bin/bash
+if [[ "$*" == *"--print-to-file"* ]]; then
+    args=("$@")
+    for i in "${!args[@]}"; do
+        if [[ "${args[$i]}" == "--print-to-file" ]]; then
+            outfile="${args[$((i+2))]}"
+            echo '{"live_status": null}' > "$outfile"
+            exit 0
+        fi
+    done
+fi
+
+if [[ "$*" == *"--flat-playlist"* ]]; then
+    echo '{"id":"upcoming_premiere_vid","title":"Premiere Video"}'
+    exit 0
+fi
+
+echo "ERROR: [youtube] upcoming_premiere_vid: Premieres in 43 minutes"
+exit 1
+BASH);
+        chmod($mockYtDlp, 0755);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        // Run it several times (well past the 3-strikes threshold used for other unavailable
+        // reasons) — it must never get persisted or warned about, no matter how many times.
+        for ($i = 0; $i < 4; $i++) {
+            Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+        }
+
+        $this->assertNull(Video::where('youtube_id', 'upcoming_premiere_vid')->first());
+        $this->assertSame(0, Warning::where('source', 'video_check_failed')->count());
+        $this->assertStringContainsString('Skipping video upcoming_premiere_vid: premieres soon', Artisan::output());
+
+        unlink($mockYtDlp);
+    }
+
     public function test_check_channels_does_not_permanently_blacklist_a_video_after_a_single_transient_failure()
     {
         // Regression test: yt-dlp/YouTube's bot-detection (or a JS-runtime hiccup) can produce a
