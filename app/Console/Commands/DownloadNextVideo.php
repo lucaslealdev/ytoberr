@@ -283,10 +283,23 @@ class DownloadNextVideo extends Command
     }
 
     /**
-     * Handle download failure (private/removed, cookies, retries, general queue suspensions)
+     * Handle download failure (members-only, private/removed, cookies, retries, general queue suspensions)
      */
     private function handleFailure(Video $video, string $errorOutput): void
     {
+        // 0. Members-only restriction: unlike a genuinely private/removed video, this isn't
+        // necessarily permanent — the channel could grant access later. Rather than
+        // blacklisting it (prevent_download) or counting it toward the queue-suspension/
+        // warning machinery below, the video row is deleted outright so a future channel
+        // check treats it as a fresh, unknown candidate and quietly retries it, without ever
+        // bothering the user with a warning about it.
+        if (Video::isMembersOnlyRestricted($errorOutput)) {
+            Log::info("Video {$video->youtube_id} is members-only-restricted; removing from the queue without warning so a future channel check retries it.");
+            $video->delete();
+
+            return;
+        }
+
         // 1. Check for permanently unavailable videos (Private, Removed, Unavailable)
         $reason = Video::detectUnavailableReason($errorOutput);
 
@@ -309,7 +322,6 @@ class DownloadNextVideo extends Command
         $needsCookies = Str::contains($errorOutputLower, [
             'sign in to confirm',
             'confirm your age',
-            'available to this channel\'s members',
         ]);
 
         // Increment retry count

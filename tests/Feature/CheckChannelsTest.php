@@ -525,6 +525,59 @@ BASH);
         unlink($mockYtDlp);
     }
 
+    public function test_check_channels_skips_members_only_videos_silently_and_keeps_retrying_indefinitely()
+    {
+        // Regression test: a members-only restriction is not necessarily permanent (the
+        // channel's uploader could grant access later), so unlike a genuinely unavailable
+        // video it must never be persisted as a known/excluded row, must never generate a
+        // Warning, and must keep being reconsidered on every future channel check — not just
+        // for 2 checks before being permanently blacklisted like detectUnavailableReason()'s
+        // other reasons.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_members_only_chan',
+            'name' => 'Members Only Channel',
+            'url' => 'https://www.youtube.com/@members_only_channel',
+            'download_quality' => '720p',
+        ]);
+
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_members_only_check.sh');
+        file_put_contents($mockYtDlp, <<<'BASH'
+#!/bin/bash
+if [[ "$*" == *"--print-to-file"* ]]; then
+    args=("$@")
+    for i in "${!args[@]}"; do
+        if [[ "${args[$i]}" == "--print-to-file" ]]; then
+            outfile="${args[$((i+2))]}"
+            echo '{"live_status": null}' > "$outfile"
+            exit 0
+        fi
+    done
+fi
+
+if [[ "$*" == *"--flat-playlist"* ]]; then
+    echo '{"id":"ezeZ-qoxaXA","title":"Members Only Video"}'
+    exit 0
+fi
+
+echo "ERROR: [youtube] ezeZ-qoxaXA: This video is available to this channel's members on level: miserável (or any higher level). Join this channel to get access to members-only content and other exclusive perks."
+exit 1
+BASH);
+        chmod($mockYtDlp, 0755);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        // Run it several times (well past the 3-strikes threshold used for other unavailable
+        // reasons) — it must never get persisted or warned about, no matter how many times.
+        for ($i = 0; $i < 4; $i++) {
+            Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+        }
+
+        $this->assertNull(Video::where('youtube_id', 'ezeZ-qoxaXA')->first());
+        $this->assertSame(0, Warning::where('source', 'video_check_failed')->count());
+        $this->assertStringContainsString('Skipping video ezeZ-qoxaXA: members-only content', Artisan::output());
+
+        unlink($mockYtDlp);
+    }
+
     public function test_check_channels_does_not_permanently_blacklist_a_video_after_a_single_transient_failure()
     {
         // Regression test: yt-dlp/YouTube's bot-detection (or a JS-runtime hiccup) can produce a
