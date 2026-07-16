@@ -33,6 +33,13 @@ class DownloadNextVideo extends Command
      */
     private const MAX_RUNTIME_SECONDS = 100;
 
+    /**
+     * Unique prefix for the progress lines emitted via --progress-template below, so they can
+     * be picked out of yt-dlp's much noisier general output (format selection, merger/ffmpeg
+     * lines, etc.) with a simple substring check before the percentage regex even runs.
+     */
+    private const PROGRESS_MARKER = 'YTOBERR_PROGRESS';
+
     public function handle(PlexAssetService $plexAssets, YtDlpWrapper $ytDlpWrapper)
     {
         $this->info('Starting download queue processor...');
@@ -93,7 +100,7 @@ class DownloadNextVideo extends Command
         $this->info("Processing video: {$video->title} (ID: {$video->youtube_id})");
 
         // 2. Mark as downloading
-        $video->update(['status' => 'downloading']);
+        $video->update(['status' => 'downloading', 'progress_percent' => 0]);
 
         // 3. Create temp directory
         $tempDir = storage_path('app/temp/'.Str::random(16));
@@ -124,6 +131,12 @@ class DownloadNextVideo extends Command
             '--convert-thumbnails jpg',
             '--write-info-json',
             '--output '.escapeshellarg($outputTemplate),
+            // --newline forces one progress update per line (instead of \r-overwriting a single
+            // line, which assumes an interactive terminal); the custom template gives us a
+            // marker prefix plus just the percentage, so it's cheap to pick out below without
+            // parsing yt-dlp's much busier default progress line.
+            '--newline',
+            '--progress-template '.escapeshellarg('download:'.self::PROGRESS_MARKER.' %(progress._percent_str)s'),
         ];
 
         // Sleep between requests/downloads to avoid triggering YouTube's IP rate-limiting.
@@ -149,7 +162,7 @@ class DownloadNextVideo extends Command
         // 30 minutes: generous enough for a large video over a slow connection, while still
         // guaranteeing a hung download gets killed outright instead of blocking this command
         // (and the every-2-minutes schedule behind it, via withoutOverlapping()) forever.
-        [$output, $resultCode] = $ytDlpWrapper->runCommand($command, 1800);
+        [$output, $resultCode] = $ytDlpWrapper->runCommand($command, 1800, $this->progressWriter($video));
 
         $rawOutput = implode("\n", $output);
 
@@ -248,6 +261,7 @@ class DownloadNextVideo extends Command
             // 5. Update Database Record
             $video->update([
                 'status' => 'completed',
+                'progress_percent' => 100,
                 'file_path' => $relativePath,
                 'file_size' => filesize($targetFile) ?: null,
                 'downloaded_at' => now(),
@@ -377,5 +391,45 @@ class DownloadNextVideo extends Command
         if (file_exists($dir)) {
             exec('rm -rf '.escapeshellarg($dir));
         }
+    }
+
+    /**
+     * Build a YtDlpWrapper output callback that keeps $video->progress_percent roughly in sync
+     * with yt-dlp's real download progress, for display in the Processes page's "Live Activity".
+     *
+     * Deliberately throttled to a write only every 5 percentage points (or on hitting 100%)
+     * instead of on every progress line — yt-dlp emits several updates per second, and a single
+     * "downloading" video already holds this command's undivided attention, so there's no value
+     * (and real SQLite write overhead) in persisting every single one of them.
+     *
+     * A format like "bv*+ba" downloads video and audio as two separate sequential streams, each
+     * independently reported 0-100% by yt-dlp — so this can legitimately jump back down once
+     * partway through (video finishes at 100%, audio then restarts from 0%). That's treated as
+     * a big-enough move to write immediately, same as any other >=5-point change.
+     */
+    private function progressWriter(Video $video): callable
+    {
+        $lastSavedPercent = -1;
+
+        return function (string $type, string $buffer) use ($video, &$lastSavedPercent) {
+            foreach (preg_split('/\r\n|\r|\n/', $buffer) as $line) {
+                if (! str_contains($line, self::PROGRESS_MARKER)) {
+                    continue;
+                }
+
+                if (! preg_match('/([\d.]+)\s*%/', $line, $matches)) {
+                    continue;
+                }
+
+                $percent = max(0, min(100, (int) round((float) $matches[1])));
+
+                if (abs($percent - $lastSavedPercent) < 5 && $percent !== 100) {
+                    continue;
+                }
+
+                $lastSavedPercent = $percent;
+                $video->update(['progress_percent' => $percent]);
+            }
+        };
     }
 }

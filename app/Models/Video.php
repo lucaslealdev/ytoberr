@@ -12,8 +12,8 @@ class Video extends Model
 {
     protected $fillable = [
         'channel_id', 'youtube_id', 'title', 'description', 'published_at', 'duration',
-        'file_path', 'file_size', 'thumbnail_path', 'status', 'retries', 'last_error',
-        'prevent_download', 'unavailable_reason', 'downloaded_at',
+        'file_path', 'file_size', 'thumbnail_path', 'status', 'progress_percent', 'retries',
+        'last_error', 'prevent_download', 'unavailable_reason', 'downloaded_at',
     ];
 
     protected static function booted()

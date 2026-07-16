@@ -566,6 +566,46 @@ BASH);
         }
     }
 
+    public function test_downloader_saves_progress_percent_from_ytdlp_output_throttled_to_5_point_steps()
+    {
+        // Regression test: --newline --progress-template lines from yt-dlp (simulated here by
+        // the mock script, since the real binary is swapped out) must be parsed and persisted
+        // to progress_percent, throttled so only >=5-point moves are written. The download then
+        // fails (rather than succeeds) so the success path's unconditional progress_percent=100
+        // write can't mask whether the throttled writer actually ran.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_test_chan',
+            'name' => 'Space Channel',
+            'url' => 'https://example.com/space',
+        ]);
+
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'progress_vid',
+            'title' => 'Progress Video',
+            'published_at' => now(),
+            'status' => 'pending',
+        ]);
+
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_progress.sh');
+        file_put_contents($mockYtDlp, <<<'BASH'
+#!/bin/bash
+echo "YTOBERR_PROGRESS  10.0%"
+echo "YTOBERR_PROGRESS  47.0%"
+echo "YTOBERR_PROGRESS  93.0%"
+echo "ERROR: general connection error"
+exit 1
+BASH);
+        chmod($mockYtDlp, 0755);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('videos:download');
+
+        $this->assertEquals(93, $video->fresh()->progress_percent);
+
+        unlink($mockYtDlp);
+    }
+
     public function test_downloader_sleeps_between_videos_but_not_before_the_first_or_after_the_last()
     {
         // --sleep-requests/--sleep-interval only throttle requests *within* a single yt-dlp

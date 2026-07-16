@@ -21,7 +21,17 @@
         @else
             <div class="space-y-2 text-sm">
                 @if ($downloadingVideo)
-                    <p class="text-blue-400">⬇️ Downloading: <span class="text-white font-semibold">{{ $downloadingVideo->title }}</span> <span class="text-gray-500">({{ $downloadingVideo->channel->name ?? 'Unknown' }})</span></p>
+                    <p class="text-blue-400">
+                        ⬇️ Downloading: <span class="text-white font-semibold">{{ $downloadingVideo->title }}</span> <span class="text-gray-500">({{ $downloadingVideo->channel->name ?? 'Unknown' }})</span>
+                        @if (! is_null($downloadingVideo->progress_percent))
+                            <span class="text-gray-400">&mdash; {{ $downloadingVideo->progress_percent }}%</span>
+                        @endif
+                    </p>
+                    @if (! is_null($downloadingVideo->progress_percent))
+                        <div class="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden max-w-md">
+                            <div class="h-1.5 rounded-full bg-blue-500 transition-all" style="width: {{ $downloadingVideo->progress_percent }}%"></div>
+                        </div>
+                    @endif
                 @endif
                 @if ($checkingChannel)
                     <p class="text-blue-400">🔄 Checking for new videos: <span class="text-white font-semibold">{{ $checkingChannel['channelName'] ?? 'Unknown channel' }}</span></p>
