@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\SetupController;
 use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\LogsController;
 use App\Http\Controllers\MediaController;
 use App\Http\Controllers\ProcessesController;
 use App\Http\Controllers\SettingsController;
@@ -58,5 +59,8 @@ Route::middleware('auth')->group(function () {
         Route::delete('/processes/jobs/{id}', [ProcessesController::class, 'destroyJob'])->name('processes.jobs.destroy');
         Route::post('/processes/failed-jobs/{uuid}/retry', [ProcessesController::class, 'retryFailedJob'])->name('processes.failed-jobs.retry');
         Route::delete('/processes/failed-jobs/{uuid}', [ProcessesController::class, 'destroyFailedJob'])->name('processes.failed-jobs.destroy');
+
+        Route::get('/logs', [LogsController::class, 'index'])->name('logs.index');
+        Route::delete('/logs', [LogsController::class, 'clear'])->name('logs.clear');
     });
 });
