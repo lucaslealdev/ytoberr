@@ -45,7 +45,17 @@ class CheckChannelsForNewVideos extends Command
         $delay = Setting::ytdlpDelaySeconds();
         $isFirstChannel = true;
 
+        // An explicit --channel targets a single channel on purpose (the "Check for New
+        // Videos" button, via CheckChannelForNewVideosJob) — that always runs immediately
+        // regardless of its own check_interval_hours. The interval only throttles the
+        // scheduled sweep across every channel.
+        $isTargeted = (bool) $this->option('channel');
+
         foreach ($channels as $channel) {
+            if (! $isTargeted && ! $channel->isDueForCheck()) {
+                continue;
+            }
+
             // --sleep-requests only throttles requests *within* a single yt-dlp process; with
             // many channels, this loop fires a fresh yt-dlp process per channel back-to-back,
             // so the actual gap between channels has to be enforced here instead.
@@ -72,6 +82,8 @@ class CheckChannelsForNewVideos extends Command
 
                 continue;
             }
+
+            $channel->update(['last_checked_at' => now()]);
 
             try {
                 // 1. Live_status precheck (based on Pinchflat) using the Wrapper

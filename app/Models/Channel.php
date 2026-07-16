@@ -7,7 +7,43 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Channel extends Model
 {
-    protected $fillable = ['youtube_id', 'name', 'url', 'profile_image_path', 'banner_path', 'fanart_path', 'download_quality', 'cutoff_date', 'description', 'download_shorts'];
+    /**
+     * Hours between automatic "new videos" checks for a channel that hasn't set its own
+     * check_interval_hours — matches the scheduled sweep's historical fixed cadence.
+     */
+    public const DEFAULT_CHECK_INTERVAL_HOURS = 3;
+
+    protected $fillable = [
+        'youtube_id', 'name', 'url', 'profile_image_path', 'banner_path', 'fanart_path',
+        'download_quality', 'cutoff_date', 'description', 'download_shorts',
+        'check_interval_hours', 'last_checked_at',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'last_checked_at' => 'datetime',
+        ];
+    }
+
+    /**
+     * This channel's effective check interval: its own override if set, otherwise the
+     * global default.
+     */
+    public function checkIntervalHours(): int
+    {
+        return $this->check_interval_hours ?? self::DEFAULT_CHECK_INTERVAL_HOURS;
+    }
+
+    /**
+     * Whether this channel is due for another automatic "new videos" check right now, based
+     * on when it was last checked and its effective check interval. A channel that has never
+     * been checked is always due.
+     */
+    public function isDueForCheck(): bool
+    {
+        return ! $this->last_checked_at || $this->last_checked_at->lte(now()->subHours($this->checkIntervalHours()));
+    }
 
     protected static function booted()
     {
