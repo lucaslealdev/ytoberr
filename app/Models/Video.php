@@ -143,6 +143,32 @@ class Video extends Model
     }
 
     /**
+     * The description, HTML-escaped and with any http(s) URL turned into a clickable link
+     * that opens in a new tab. The whole string is escaped up front and the URL regex is
+     * matched against that already-escaped text (rather than escaping each piece
+     * separately), so a query string's "&" is correctly captured as "&amp;" instead of
+     * splitting the URL in two — the callback below builds the anchor straight from what it
+     * matched, without ever re-escaping it. Safe to output with {!! !!} in a view.
+     */
+    public function descriptionHtml(): string
+    {
+        if ($this->description === null) {
+            return '';
+        }
+
+        $escaped = e($this->description);
+
+        return preg_replace_callback('/https?:\/\/[^\s<]+/i', function (array $matches) {
+            // Trailing punctuation almost always belongs to the surrounding sentence, not
+            // the URL itself (e.g. "see https://example.com." shouldn't link the period).
+            $url = rtrim($matches[0], '.,;:!?');
+            $trailingPunctuation = substr($matches[0], strlen($url));
+
+            return '<a href="'.$url.'" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline break-all">'.$url.'</a>'.$trailingPunctuation;
+        }, $escaped);
+    }
+
+    /**
      * Human-readable video length ("1:23:45" or "4:32"), or null if unknown (videos
      * discovered before the duration field was captured won't have one).
      */
