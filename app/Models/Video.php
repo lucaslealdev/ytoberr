@@ -96,6 +96,21 @@ class Video extends Model
     }
 
     /**
+     * Whether yt-dlp's error output indicates the video is a scheduled premiere that hasn't
+     * gone live yet (e.g. "Premieres in 43 minutes"). yt-dlp can't extract downloadable
+     * formats until the premiere actually starts, so this surfaces as a metadata-fetch
+     * failure even though the video itself is perfectly fine.
+     *
+     * Like isMembersOnlyRestricted(), this is self-resolving rather than permanent — the
+     * premiere will have started by a future channel check — so callers should skip it
+     * quietly instead of warning about it.
+     */
+    public static function isUpcomingPremiere(string $errorOutput): bool
+    {
+        return Str::contains(strtolower($errorOutput), 'premieres in');
+    }
+
+    /**
      * URL for the locally-saved thumbnail, or null if it isn't set or the file is missing on disk.
      */
     public function thumbnailUrl(): ?string

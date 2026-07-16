@@ -187,6 +187,16 @@ class CheckChannelsForNewVideos extends Command
                             continue;
                         }
 
+                        // Upcoming premiere: yt-dlp can't extract downloadable formats until the
+                        // premiere actually goes live ("Premieres in 43 minutes"), so this isn't a
+                        // real failure — it self-resolves by the time of a future channel check,
+                        // same reasoning as the members-only skip above.
+                        if (Video::isUpcomingPremiere($errorOutput)) {
+                            $this->info("Skipping video {$videoId}: premieres soon. Will retry on a future channel check.");
+
+                            continue;
+                        }
+
                         // yt-dlp/YouTube's bot-detection (or a JS-runtime hiccup) can produce a
                         // one-off "Video unavailable" response for a video that's actually fine —
                         // observed in practice: a video reported unavailable came back with full
