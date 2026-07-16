@@ -34,6 +34,7 @@ class AppServiceProvider extends ServiceProvider
 
             $view->with([
                 'pendingQueueCount' => Video::whereIn('status', ['pending', 'downloading'])->count(),
+                'failedQueueCount' => Video::where('status', 'failed')->count(),
                 'warningsCount' => Warning::count(),
                 'diskUsedPercent' => $diskUsedPercent,
                 'diskBarColor' => Setting::diskUsageColorClass($diskUsedPercent),

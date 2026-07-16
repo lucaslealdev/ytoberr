@@ -35,6 +35,24 @@
                         @endif
                     </a>
                 </li>
+            @elseif((($pendingQueueCount ?? 0) > 0) || (($failedQueueCount ?? 0) > 0))
+                {{-- Advanced Mode (and the Processes page behind it) is off, but there's still
+                     pending or failed downloads a user should know about — a compact summary
+                     here, rather than nothing, so they aren't left unaware without opting in to
+                     the full queue internals. Links straight to /processes, which itself
+                     redirects to Settings with a prompt to enable Advanced Mode. --}}
+                <li>
+                    <a href="/processes" class="block p-2 rounded border-l-4 border-transparent hover:bg-gray-800 text-gray-500 hover:text-gray-300 text-xs">
+                        <span class="flex items-center gap-3">
+                            @if(($pendingQueueCount ?? 0) > 0)
+                                <span>⬇️ {{ $pendingQueueCount }} pending</span>
+                            @endif
+                            @if(($failedQueueCount ?? 0) > 0)
+                                <span class="text-red-400">⚠️ {{ $failedQueueCount }} failed</span>
+                            @endif
+                        </span>
+                    </a>
+                </li>
             @endif
         </ul>
     </nav>
