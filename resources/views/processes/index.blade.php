@@ -6,12 +6,6 @@
     <h2 class="text-2xl font-bold mb-2">Processes</h2>
     <p class="text-gray-500 text-sm mb-6">What's running in the background right now, and the raw Laravel queue behind it.</p>
 
-    @if (session('status'))
-        <div class="bg-green-600 text-white p-4 rounded mb-6">
-            {{ session('status') }}
-        </div>
-    @endif
-
     <!-- Live Activity -->
     <div class="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800 mb-8">
         <h3 class="text-lg font-semibold text-white mb-4">Live Activity</h3>

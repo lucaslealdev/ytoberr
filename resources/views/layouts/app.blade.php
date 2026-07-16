@@ -53,5 +53,6 @@
         closeSidebar.addEventListener('click', toggleSidebar);
         overlay.addEventListener('click', toggleSidebar);
     </script>
+    @include('components.flash-toast')
 </body>
 </html>

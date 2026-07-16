@@ -4,12 +4,6 @@
 @section('header', 'Channel Details')
 
 @section('content')
-    @if (session('status'))
-        <div class="bg-green-600 text-white p-4 rounded mb-6">
-            {{ session('status') }}
-        </div>
-    @endif
-
     <!-- Breadcrumb -->
     <nav class="text-sm text-gray-400 mb-6">
         <a href="/channels" class="hover:text-white transition duration-200">Channels</a>

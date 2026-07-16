@@ -5,12 +5,6 @@
 @section('content')
     <h2 class="text-2xl font-bold mb-6">Settings</h2>
 
-    @if (session('status'))
-        <div class="bg-green-600 text-white p-4 rounded mb-6">
-            {{ session('status') }}
-        </div>
-    @endif
-
     <div class="columns-1 xl:columns-2 gap-6">
         <div class="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800 mb-6 break-inside-avoid">
             <h3 class="text-lg font-semibold text-white mb-4">Profile</h3>
