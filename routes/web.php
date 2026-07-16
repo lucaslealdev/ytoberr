@@ -32,6 +32,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/videos/{video}', [VideoController::class, 'show']);
     Route::post('/videos/{video}/retry', [VideoController::class, 'retry'])->name('videos.retry');
     Route::get('/media/{path}', [MediaController::class, 'show'])->where('path', '.*')->name('media.show');
+    Route::get('/channel-media/{path}', [MediaController::class, 'showPublicDisk'])->where('path', '.*')->name('media.channel.show');
     Route::get('/settings', [SettingsController::class, 'index']);
     Route::post('/settings/profile', [SettingsController::class, 'updateProfile']);
     Route::post('/settings/update-tools', [SettingsController::class, 'updateTools']);
