@@ -31,6 +31,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/videos', [VideoController::class, 'index']);
     Route::get('/videos/{video}', [VideoController::class, 'show']);
     Route::post('/videos/{video}/retry', [VideoController::class, 'retry'])->name('videos.retry');
+    Route::delete('/videos/{video}', [VideoController::class, 'destroy'])->name('videos.destroy');
     Route::get('/media/{path}', [MediaController::class, 'show'])->where('path', '.*')->name('media.show');
     Route::get('/channel-media/{path}', [MediaController::class, 'showPublicDisk'])->where('path', '.*')->name('media.channel.show');
     Route::get('/settings', [SettingsController::class, 'index']);

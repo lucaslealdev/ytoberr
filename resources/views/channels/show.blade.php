@@ -105,4 +105,5 @@
     {{ $videos->links('components.pagination') }}
 
     @include('channels._channel-modals')
+    @include('videos._video-modals')
 @endsection

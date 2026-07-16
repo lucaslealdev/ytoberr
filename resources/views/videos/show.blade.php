@@ -36,9 +36,15 @@
             <div class="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800">
                 <div class="flex flex-wrap items-start justify-between gap-3 mb-2">
                     <h1 class="text-2xl font-bold text-white">{{ $video->title }}</h1>
-                    @if ($video->videoUrl())
-                        <a href="{{ $video->videoUrl() }}" download class="shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded px-2.5 py-1 transition duration-200 text-sm font-semibold">Download Original File</a>
-                    @endif
+                    <div class="shrink-0 flex items-center gap-2">
+                        @if ($video->videoUrl())
+                            <a href="{{ $video->videoUrl() }}" download class="bg-blue-600 hover:bg-blue-700 text-white rounded px-2.5 py-1 transition duration-200 text-sm font-semibold">Download Original File</a>
+                        @endif
+                        @include('videos._video-actions', [
+                            'video' => $video,
+                            'redirectTo' => $video->channel ? '/channels/'.$video->channel->id : '/videos',
+                        ])
+                    </div>
                 </div>
                 <div class="flex flex-wrap items-center gap-3 text-sm text-gray-400 mb-4">
                     @if ($video->channel)
@@ -120,4 +126,6 @@
             </div>
         @endif
     </div>
+
+    @include('videos._video-modals')
 @endsection
