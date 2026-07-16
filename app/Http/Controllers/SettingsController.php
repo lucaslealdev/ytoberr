@@ -78,7 +78,28 @@ class SettingsController extends Controller
             'storage_path' => ['required', 'string'],
         ]);
 
-        Setting::set('storage_path', $request->storage_path);
+        $path = rtrim($request->string('storage_path')->trim()->toString(), '/');
+
+        if ($path === '') {
+            return back()->withErrors(['storage_path' => 'Enter a valid directory path.']);
+        }
+
+        if (! is_dir($path)) {
+            // @-suppressed: mkdir() emits an E_WARNING on failure (bad permissions, a parent
+            // that's actually a file, etc.) that would otherwise surface as a generic error
+            // page instead of the validation message below.
+            if (! @mkdir($path, 0755, true)) {
+                return back()->withErrors([
+                    'storage_path' => 'This directory does not exist and could not be created. Check the path and that the application has permission to create it.',
+                ]);
+            }
+        } elseif (! is_writable($path)) {
+            return back()->withErrors([
+                'storage_path' => 'This directory exists but is not writable by the application. Check its permissions.',
+            ]);
+        }
+
+        Setting::set('storage_path', $path);
 
         return back()->with('status', 'Storage path updated successfully!');
     }
