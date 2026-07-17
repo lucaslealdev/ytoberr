@@ -63,7 +63,7 @@ class CleaningControllerTest extends TestCase
         $response->assertRedirect('/settings');
     }
 
-    public function test_cleaning_page_shows_at_most_ten_videos_ordered_by_size_descending()
+    public function test_cleaning_page_biggest_tab_shows_at_most_ten_videos_ordered_by_size_descending()
     {
         Setting::set('advanced_mode', '1');
         $user = User::factory()->create();
@@ -73,14 +73,18 @@ class CleaningControllerTest extends TestCase
         }
 
         $response = $this->actingAs($user)->get('/cleaning');
-
         $response->assertStatus(200);
-        $response->assertSee('Cleaning Test Video cleaning_vid_12');
-        $response->assertDontSee('Cleaning Test Video cleaning_vid_2');
 
+        // Scoped to the Biggest Videos panel: all 12 videos also appear in the Oldest Videos
+        // panel below it (they're all "published" at the same instant in this test), so an
+        // unscoped assertDontSee('...vid_2') would incorrectly fail on that panel instead.
         $content = $response->getContent();
+        $biggestPanel = substr($content, strpos($content, 'data-tab-panel="biggest"'), strpos($content, 'data-tab-panel="oldest"') - strpos($content, 'data-tab-panel="biggest"'));
+
+        $this->assertStringContainsString('Cleaning Test Video cleaning_vid_12', $biggestPanel);
+        $this->assertStringNotContainsString('Cleaning Test Video cleaning_vid_2"', $biggestPanel);
         $this->assertTrue(
-            strpos($content, 'cleaning_vid_12') < strpos($content, 'cleaning_vid_11'),
+            strpos($biggestPanel, 'cleaning_vid_12') < strpos($biggestPanel, 'cleaning_vid_11'),
             'Heaviest video should be listed first.'
         );
     }
@@ -95,9 +99,60 @@ class CleaningControllerTest extends TestCase
         $response = $this->actingAs($user)->get('/cleaning');
 
         $response->assertStatus(200);
-        $response->assertSee('id="cleaning-select-all"', false);
+        $response->assertSee('cleaning-select-all', false);
         $response->assertSee('cleaning-video-checkbox', false);
         $response->assertSee('id="cleaning-delete-modal"', false);
+    }
+
+    public function test_cleaning_page_shows_both_tabs_with_the_biggest_tab_active_by_default()
+    {
+        Setting::set('advanced_mode', '1');
+        $user = User::factory()->create();
+
+        $this->makeVideo('cleaning_tabs_vid', 5000);
+
+        $response = $this->actingAs($user)->get('/cleaning');
+
+        $response->assertStatus(200);
+        $response->assertSee('Biggest Videos');
+        $response->assertSee('Oldest Videos');
+        // The Biggest Videos panel renders without the "hidden" class; the Oldest Videos
+        // panel renders with it, so only one tab is visible before any JS runs.
+        $response->assertSee('class="cleaning-tab-panel " data-tab-panel="biggest"', false);
+        $response->assertSee('class="cleaning-tab-panel hidden" data-tab-panel="oldest"', false);
+    }
+
+    public function test_cleaning_page_oldest_tab_shows_at_most_fifty_videos_ordered_oldest_first()
+    {
+        Setting::set('advanced_mode', '1');
+        $user = User::factory()->create();
+
+        for ($i = 1; $i <= 52; $i++) {
+            $this->makeVideo("cleaning_old_vid_{$i}", $i <= 50 ? 1000 : 1, [
+                // Higher $i = published more recently, so vid_1 is the oldest and vid_52 the
+                // newest. vid_51/vid_52 also get a much smaller file_size than the rest, so
+                // they're never pulled into the Biggest Videos tab and can't leak into it.
+                'published_at' => now()->subDays(200 - $i),
+            ]);
+        }
+
+        $response = $this->actingAs($user)->get('/cleaning');
+
+        $response->assertStatus(200);
+        $response->assertSee('Cleaning Test Video cleaning_old_vid_1"', false);
+        $response->assertSee('Cleaning Test Video cleaning_old_vid_50"', false);
+        $response->assertDontSee('Cleaning Test Video cleaning_old_vid_51"', false);
+        $response->assertDontSee('Cleaning Test Video cleaning_old_vid_52"', false);
+
+        // Scoped to the Oldest Videos panel itself: the Biggest Videos panel above it also
+        // contains some of these same videos (tied at file_size=1000), in whatever arbitrary
+        // order ties break in, which would otherwise make this ordering check unreliable.
+        $content = $response->getContent();
+        $oldestPanelStart = strpos($content, 'data-tab-panel="oldest"');
+        $this->assertTrue(
+            strpos($content, 'cleaning_old_vid_1"', $oldestPanelStart) < strpos($content, 'cleaning_old_vid_2"', $oldestPanelStart),
+            'Oldest video should be listed first within the Oldest Videos tab.'
+        );
     }
 
     public function test_bulk_delete_without_flags_removes_selected_videos_entirely_and_leaves_files()
@@ -163,6 +218,21 @@ class CleaningControllerTest extends TestCase
         $this->assertNull($video->file_path);
         $this->assertNull($video->file_size);
         $this->assertTrue((bool) $video->prevent_download);
+    }
+
+    public function test_bulk_delete_redirects_back_to_the_tab_it_was_triggered_from()
+    {
+        Setting::set('advanced_mode', '1');
+        $user = User::factory()->create();
+
+        $video = $this->makeVideo('cleaning_bulk_tab_redirect', 1000);
+
+        $response = $this->actingAs($user)->delete('/cleaning/videos', [
+            'video_ids' => [$video->id],
+            'tab' => 'oldest',
+        ]);
+
+        $response->assertRedirect(route('cleaning.index', ['tab' => 'oldest']));
     }
 
     public function test_bulk_delete_requires_at_least_one_video_id()
