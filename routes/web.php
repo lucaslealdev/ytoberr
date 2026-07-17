@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\SetupController;
 use App\Http\Controllers\ChannelController;
+use App\Http\Controllers\CleaningController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LogsController;
 use App\Http\Controllers\MediaController;
@@ -64,5 +65,8 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/logs', [LogsController::class, 'index'])->name('logs.index');
         Route::delete('/logs', [LogsController::class, 'clear'])->name('logs.clear');
+
+        Route::get('/cleaning', [CleaningController::class, 'index'])->name('cleaning.index');
+        Route::delete('/cleaning/videos', [CleaningController::class, 'destroy'])->name('cleaning.videos.destroy');
     });
 });
