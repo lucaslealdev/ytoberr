@@ -173,3 +173,10 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - To filter on a particular test name: `php artisan test --compact --filter=testName` (recommended after making a change to a related file).
 
 </laravel-boost-guidelines>
+
+# Local Preview Data
+
+- Need fake videos/channels to preview video-listing UI (e.g. the Cleaning page) in a browser? Use `php artisan dev:seed-placeholder-videos --count=60` (see `app/Console/Commands/SeedPlaceholderVideos.php`). It creates one "Placeholder Demo Channel" with real (tiny, GD-generated) JPEG thumbnails, varied file sizes, and publish dates spread across ~2 years — enough to exercise both size- and date-based sorting/limits at once.
+- Always use this command instead of writing a one-off tinker/seed script — it's idempotent (safe to re-run) and keyed off a fixed `placeholder_demo_vid_*` youtube_id prefix / `Placeholder Demo Channel` name.
+- Clean up with `php artisan dev:seed-placeholder-videos --clear`, which removes exactly what it seeded (videos, channel, and the downloaded files/thumbnails on disk) — never real data.
+- It's dev-only: guarded by Laravel's standard production confirmation prompt (bypass with `--force` if ever needed against a non-local `APP_ENV`).
