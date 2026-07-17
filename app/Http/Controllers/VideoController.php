@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Setting;
 use App\Models\Video;
+use App\Services\VideoDeletionService;
 use Illuminate\Http\Request;
 
 class VideoController extends Controller
 {
+    public function __construct(private VideoDeletionService $videoDeletionService) {}
+
     public function index(Request $request)
     {
         $search = trim((string) $request->query('search', ''));
@@ -98,27 +100,7 @@ class VideoController extends Controller
     {
         $title = $video->title;
 
-        if ($request->boolean('delete_files')) {
-            $this->deleteVideoFilesFromDisk($video);
-        }
-
-        if ($request->boolean('prevent_redownload')) {
-            // status=deleted keeps this row out of every listing/show query (all scoped to
-            // status=completed) and out of the download queue (videos:download only pulls
-            // status=pending), while the row's continued existence is exactly what stops
-            // CheckChannelsForNewVideos from ever treating it as a new candidate again.
-            $video->update([
-                'status' => 'deleted',
-                'file_path' => null,
-                'file_size' => null,
-                'thumbnail_path' => null,
-                'downloaded_at' => null,
-                'prevent_download' => true,
-                'unavailable_reason' => 'Manually deleted',
-            ]);
-        } else {
-            $video->delete();
-        }
+        $this->videoDeletionService->delete($video, $request->boolean('delete_files'), $request->boolean('prevent_redownload'));
 
         $message = "\"{$title}\" has been deleted.";
 
@@ -132,38 +114,5 @@ class VideoController extends Controller
         }
 
         return back()->with('status', $message);
-    }
-
-    /**
-     * Best-effort, opt-in removal of a single video's downloaded file, thumbnail and .nfo
-     * metadata from disk. Same realpath()-containment technique as
-     * ChannelController::deleteChannelFilesFromDisk(): anything that doesn't resolve to a real
-     * path inside the configured downloads directory is silently skipped rather than deleted.
-     */
-    private function deleteVideoFilesFromDisk(Video $video): void
-    {
-        $downloadsDir = realpath(Setting::getStoragePath());
-        if (! $downloadsDir) {
-            return;
-        }
-
-        $relativePaths = [$video->file_path, $video->thumbnail_path];
-        if ($video->file_path) {
-            // Plex "Local Media Assets" per-video .nfo shares the video's own filename, just
-            // with a .nfo extension instead (see DownloadNextVideo/PlexAssetService::writeVideoNfo).
-            $relativePaths[] = preg_replace('/\.[^.\/]+$/', '.nfo', $video->file_path);
-        }
-
-        foreach (array_filter($relativePaths) as $relativePath) {
-            $fullPath = realpath($downloadsDir.'/'.$relativePath);
-
-            if (! $fullPath || ! str_starts_with($fullPath, $downloadsDir.DIRECTORY_SEPARATOR)) {
-                continue;
-            }
-
-            if (is_file($fullPath)) {
-                unlink($fullPath);
-            }
-        }
     }
 }

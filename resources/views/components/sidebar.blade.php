@@ -38,6 +38,9 @@
                 <li>
                     <a href="/logs" class="block p-2 rounded border-l-4 {{ request()->is('logs*') ? 'border-blue-500 bg-gray-800 text-white' : 'border-transparent hover:bg-gray-800 text-gray-300 hover:text-gray-100' }}">📋 Logs</a>
                 </li>
+                <li>
+                    <a href="/cleaning" class="block p-2 rounded border-l-4 {{ request()->is('cleaning*') ? 'border-blue-500 bg-gray-800 text-white' : 'border-transparent hover:bg-gray-800 text-gray-300 hover:text-gray-100' }}">🧹 Cleaning</a>
+                </li>
             @elseif((($pendingQueueCount ?? 0) > 0) || (($failedQueueCount ?? 0) > 0))
                 {{-- Advanced Mode (and the Processes page behind it) is off, but there's still
                      pending or failed downloads a user should know about — a compact summary
