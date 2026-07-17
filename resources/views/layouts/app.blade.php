@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full">
+<html lang="en" class="h-full {{ ($lightModeEnabled ?? false) ? 'light-mode' : '' }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +8,7 @@
     <link rel="icon" type="image/png" href="{{ asset('favicon.png') }}">
     <title>@yield('title', 'Dashboard') | Ytoberr</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="{{ asset('css/theme.css') }}">
 </head>
 <body class="bg-gray-950 text-gray-100 h-full flex">
     @include('components.sidebar')

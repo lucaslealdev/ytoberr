@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -10,7 +11,7 @@ class LoginController extends Controller
 {
     public function show()
     {
-        return view('auth.login');
+        return view('auth.login', ['lightModeEnabled' => Setting::lightModeEnabled()]);
     }
 
     public function authenticate(Request $request)
@@ -22,6 +23,7 @@ class LoginController extends Controller
 
         if (Auth::attempt($credentials)) {
             $request->session()->regenerate();
+
             return redirect()->intended('/');
         }
 
@@ -35,6 +37,7 @@ class LoginController extends Controller
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+
         return redirect('/login');
     }
 }

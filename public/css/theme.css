@@ -1,0 +1,136 @@
+/*
+ * Light-mode overrides, active only when <html> has the "light-mode" class (toggled from
+ * Settings > Theme, see Setting::lightModeEnabled()). Dark mode — every view's hardcoded
+ * default Tailwind classes — is untouched and stays the default.
+ *
+ * The app loads Tailwind from the runtime CDN build (no local build step, no tailwind.config.js
+ * to register a dark:/light: variant against), so instead of variant classes, every dark-mode
+ * utility class actually used in the views gets a same-name override here, scoped under
+ * html.light-mode and marked !important so it reliably wins over the CDN's own
+ * runtime-injected <style> tag regardless of injection order.
+ *
+ * Two rules drove every color choice below:
+ *  1. Grays are inverted along the Tailwind scale (950<->50, 900<->100, 800<->200, 700<->300,
+ *     600<->400, 500 stays) so whatever read as "brightest" or "most muted" in dark mode keeps
+ *     the same relative role in light mode.
+ *  2. Blue — the dark theme's only accent color (active nav/tab states, primary buttons,
+ *     links) — is replaced with red, the requested light-mode accent. Existing reds (already
+ *     used for destructive actions) just move to darker shades for contrast against a white
+ *     background instead of changing hue.
+ */
+
+html.light-mode body {
+    background-color: #ffffff;
+    color: #111827;
+}
+
+/* ---- Page background (bg-gray-950) ---- */
+html.light-mode .bg-gray-950 { background-color: #ffffff !important; }
+html.light-mode .from-gray-950 { --tw-gradient-from: #ffffff !important; }
+
+/* ---- Panel/card/sidebar/nav backgrounds (bg-gray-900) ---- */
+html.light-mode .bg-gray-900 { background-color: #f3f4f6 !important; }
+html.light-mode .bg-gray-900\/70 { background-color: rgb(243 244 246 / 0.85) !important; }
+
+/* ---- Nested surfaces / hover backgrounds (bg-gray-800, bg-gray-700) ---- */
+html.light-mode .bg-gray-800 { background-color: #e5e7eb !important; }
+html.light-mode .bg-gray-700 { background-color: #d1d5db !important; }
+html.light-mode .hover\:bg-gray-800:hover { background-color: #d1d5db !important; }
+html.light-mode .hover\:bg-gray-700:hover { background-color: #c7ced8 !important; }
+html.light-mode .disabled\:bg-gray-700:disabled { background-color: #d1d5db !important; }
+html.light-mode .disabled\:text-gray-500:disabled { color: #6b7280 !important; }
+
+/* ---- Borders ---- */
+html.light-mode .border-gray-900 { border-color: #f3f4f6 !important; }
+html.light-mode .border-gray-800 { border-color: #e5e7eb !important; }
+html.light-mode .border-gray-700 { border-color: #d1d5db !important; }
+html.light-mode .border-gray-600 { border-color: #9ca3af !important; }
+html.light-mode .hover\:border-gray-700:hover { border-color: #9ca3af !important; }
+html.light-mode .divide-gray-800 > :not([hidden]) ~ :not([hidden]) { border-color: #e5e7eb !important; }
+
+/* ---- Text ---- */
+html.light-mode .text-white { color: #111827 !important; }
+html.light-mode .text-gray-100 { color: #111827 !important; }
+html.light-mode .text-gray-200 { color: #1f2937 !important; }
+html.light-mode .text-gray-300 { color: #374151 !important; }
+html.light-mode .text-gray-400 { color: #4b5563 !important; }
+html.light-mode .text-gray-500 { color: #6b7280 !important; }
+html.light-mode .text-gray-600 { color: #9ca3af !important; }
+html.light-mode .hover\:text-gray-100:hover { color: #030712 !important; }
+html.light-mode .hover\:text-gray-200:hover { color: #111827 !important; }
+html.light-mode .hover\:text-gray-300:hover { color: #1f2937 !important; }
+html.light-mode .hover\:text-white:hover { color: #000000 !important; }
+
+/* text-white on a solid saturated button/badge background (bg-blue|red|green-600/700) should
+   stay white — only the general heading/label usage above needs to flip to a dark color. */
+html.light-mode .bg-blue-600.text-white:not(:disabled),
+html.light-mode .bg-blue-700.text-white:not(:disabled),
+html.light-mode .bg-red-600.text-white:not(:disabled),
+html.light-mode .bg-red-700.text-white:not(:disabled),
+html.light-mode .bg-green-600.text-white:not(:disabled),
+html.light-mode .bg-green-700.text-white:not(:disabled) {
+    color: #ffffff !important;
+}
+
+/* ---- Blue -> red accent (active nav/tab states, primary buttons, links) ---- */
+html.light-mode .bg-blue-500 { background-color: #dc2626 !important; }
+html.light-mode .bg-blue-600 { background-color: #dc2626 !important; }
+html.light-mode .bg-blue-700 { background-color: #b91c1c !important; }
+html.light-mode .hover\:bg-blue-700:hover { background-color: #b91c1c !important; }
+html.light-mode .from-blue-900 { --tw-gradient-from: #fee2e2 !important; }
+html.light-mode .bg-blue-900\/40 { background-color: #fee2e2 !important; }
+html.light-mode .text-blue-300 { color: #b91c1c !important; }
+html.light-mode .text-blue-400 { color: #dc2626 !important; }
+html.light-mode .hover\:text-blue-300:hover { color: #b91c1c !important; }
+html.light-mode .hover\:text-blue-400:hover { color: #b91c1c !important; }
+html.light-mode .group-hover\:text-blue-400 { color: #b91c1c !important; }
+html.light-mode .border-blue-500 { border-color: #dc2626 !important; }
+html.light-mode .border-blue-800\/60 { border-color: rgb(252 165 165 / 0.7) !important; }
+
+/* ---- Red (already the destructive-action color — shifted darker for contrast on white) ---- */
+html.light-mode .text-red-200 { color: #991b1b !important; }
+html.light-mode .text-red-300 { color: #b91c1c !important; }
+html.light-mode .text-red-400 { color: #dc2626 !important; }
+html.light-mode .text-red-500 { color: #dc2626 !important; }
+html.light-mode .hover\:text-red-300:hover { color: #991b1b !important; }
+html.light-mode .bg-red-900\/40 { background-color: #fee2e2 !important; }
+html.light-mode .bg-red-900\/50 { background-color: #fee2e2 !important; }
+html.light-mode .bg-red-950\/50 { background-color: #fef2f2 !important; }
+html.light-mode .border-red-800\/60 { border-color: #fca5a5 !important; }
+html.light-mode .border-red-900 { border-color: #fecaca !important; }
+html.light-mode .border-red-900\/40 { border-color: rgb(252 165 165 / 0.7) !important; }
+
+/* ---- Green (success text/badges) ---- */
+html.light-mode .text-green-300 { color: #15803d !important; }
+html.light-mode .text-green-400 { color: #15803d !important; }
+html.light-mode .text-green-500 { color: #16a34a !important; }
+html.light-mode .hover\:text-green-300:hover { color: #166534 !important; }
+
+/* ---- Yellow/orange (warning text/badges) ---- */
+html.light-mode .text-yellow-300 { color: #a16207 !important; }
+html.light-mode .text-yellow-400 { color: #a16207 !important; }
+html.light-mode .text-yellow-500 { color: #a16207 !important; }
+html.light-mode .hover\:text-yellow-300:hover { color: #854d0e !important; }
+html.light-mode .bg-yellow-900\/40 { background-color: #fef9c3 !important; }
+html.light-mode .border-yellow-800\/60 { border-color: #fde047 !important; }
+
+/* ---- Inline-SVG chart accents (not Tailwind classes, so a class-based override alone
+   wouldn't reach them — dashboard.blade.php's storage-growth polyline uses a hardcoded
+   stroke="#3b82f6" attribute) ---- */
+html.light-mode .storage-growth-line { stroke: #dc2626 !important; }
+
+/* ---- Search input / form fields (nav search bar, login/setup forms) ---- */
+html.light-mode input,
+html.light-mode select,
+html.light-mode textarea {
+    color-scheme: light;
+}
+
+/* Native checkbox/radio fill: none of the views set an explicit accent-color, so it's always
+   rendered in the browser's own default blue — matching the accent-red used everywhere else
+   keeps checkboxes (Settings toggles, Cleaning row selection, the delete modal's options)
+   consistent with the rest of the light theme. */
+html.light-mode input[type="checkbox"],
+html.light-mode input[type="radio"] {
+    accent-color: #dc2626;
+}

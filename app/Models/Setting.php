@@ -69,6 +69,15 @@ class Setting extends Model
     }
 
     /**
+     * Whether the light theme (white background, red accent) is active. Off by default — the
+     * dark theme (the app's hardcoded default styling) is what every view is authored against.
+     */
+    public static function lightModeEnabled(): bool
+    {
+        return self::get('light_mode', '0') === '1';
+    }
+
+    /**
      * Percentage of disk space used at $path (or storage_path() as a fallback, if $path
      * doesn't exist yet — e.g. a custom storage path that hasn't been created).
      */

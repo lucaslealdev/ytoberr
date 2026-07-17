@@ -29,6 +29,7 @@ class SettingsController extends Controller
 
         $ytdlpDelaySeconds = Setting::ytdlpDelaySeconds();
         $advancedModeEnabled = Setting::advancedModeEnabled();
+        $lightModeEnabled = Setting::lightModeEnabled();
         $warnings = Warning::with('video')->latest()->get();
         $backupsList = $backups->list();
 
@@ -38,7 +39,7 @@ class SettingsController extends Controller
 
         return view('settings.index', compact(
             'ytDlpVersion', 'storagePath', 'cacheCount', 'latestVersion', 'updateAvailable',
-            'ytdlpDelaySeconds', 'advancedModeEnabled', 'warnings', 'backupsList',
+            'ytdlpDelaySeconds', 'advancedModeEnabled', 'lightModeEnabled', 'warnings', 'backupsList',
             'cookiesConfigured', 'cookiesUpdatedAt'
         ));
     }
@@ -120,6 +121,13 @@ class SettingsController extends Controller
         Setting::set('advanced_mode', $request->boolean('advanced_mode') ? '1' : '0');
 
         return back()->with('status', 'Advanced mode updated successfully!');
+    }
+
+    public function updateLightMode(Request $request)
+    {
+        Setting::set('light_mode', $request->boolean('light_mode') ? '1' : '0');
+
+        return back()->with('status', 'Theme updated successfully!');
     }
 
     public function updateCookies(Request $request)
