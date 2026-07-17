@@ -14,6 +14,35 @@ class ChannelService
     public function __construct(private YtDlpWrapper $ytDlpWrapper) {}
 
     /**
+     * Create a channel row and fetch/store its avatar, banner and fanart images. Shared by
+     * ChannelController::store() (adding a channel directly) and VideoController::store()
+     * (adding a single video, which implicitly registers its channel if not already known)
+     * so both end up with an identically-populated channel.
+     */
+    public function createChannel(string $youtubeId, string $name, string $url, ?string $description, string $downloadQuality): Channel
+    {
+        $channel = Channel::create([
+            'youtube_id' => $youtubeId,
+            'name' => $name,
+            'url' => $url,
+            'download_quality' => $downloadQuality,
+            'description' => $description,
+        ]);
+
+        Log::info("Fetching and storing channel images for {$name} ({$youtubeId})");
+        $this->fetchAndStoreChannelImages($channel);
+
+        $posterPath = 'channels/'.$channel->id.'/poster.jpg';
+        if (Storage::disk('public')->exists($posterPath)) {
+            $channel->update(['profile_image_path' => $posterPath]);
+        }
+
+        Log::info("Finished fetching and storing channel images for {$name} ({$youtubeId})");
+
+        return $channel;
+    }
+
+    /**
      * Download and store channel images (avatar, banner, fanart)
      * using yt-dlp based on Pinchflat's strategy.
      */

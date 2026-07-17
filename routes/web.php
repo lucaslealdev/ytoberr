@@ -30,6 +30,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/channels/{channel}/check-new-videos', [ChannelController::class, 'checkNewVideos'])->name('channels.check-new-videos');
     Route::delete('/channels/{channel}', [ChannelController::class, 'destroy'])->name('channels.destroy');
     Route::get('/videos', [VideoController::class, 'index']);
+    Route::post('/videos', [VideoController::class, 'store'])->name('videos.store');
     Route::get('/videos/{video}', [VideoController::class, 'show']);
     Route::post('/videos/{video}/retry', [VideoController::class, 'retry'])->name('videos.retry');
     Route::delete('/videos/{video}', [VideoController::class, 'destroy'])->name('videos.destroy');
