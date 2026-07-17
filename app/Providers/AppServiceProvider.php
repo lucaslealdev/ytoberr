@@ -42,6 +42,13 @@ class AppServiceProvider extends ServiceProvider
             ]);
         });
 
+        // Every authenticated page extends this layout, so sharing it here (rather than per
+        // controller) is what lets the <html> tag apply the light-mode class consistently
+        // everywhere without each controller needing to remember to pass it.
+        View::composer('layouts.app', function ($view) {
+            $view->with('lightModeEnabled', Setting::lightModeEnabled());
+        });
+
         // Throttle POST /login by IP + submitted email combined, so a lockout
         // on one email doesn't block a legitimate user from a different
         // account on the same network, and vice versa.

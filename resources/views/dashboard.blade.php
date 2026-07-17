@@ -81,7 +81,7 @@
             @endphp
 
             <svg viewBox="0 0 {{ $chartWidth }} {{ $chartHeight }}" preserveAspectRatio="none" class="w-full h-32">
-                <polyline points="{{ $polylinePoints }}" fill="none" stroke="#3b82f6" stroke-width="2" vector-effect="non-scaling-stroke" />
+                <polyline points="{{ $polylinePoints }}" fill="none" stroke="#3b82f6" class="storage-growth-line" stroke-width="2" vector-effect="non-scaling-stroke" />
             </svg>
 
             <div class="flex justify-between text-xs text-gray-500 mt-2">

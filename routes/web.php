@@ -41,6 +41,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/settings/storage-path', [SettingsController::class, 'updateStoragePath']);
     Route::post('/settings/ytdlp-delay', [SettingsController::class, 'updateYtdlpDelay']);
     Route::post('/settings/advanced-mode', [SettingsController::class, 'updateAdvancedMode']);
+    Route::post('/settings/light-mode', [SettingsController::class, 'updateLightMode']);
     Route::post('/settings/cookies', [SettingsController::class, 'updateCookies'])->name('settings.cookies.update');
     Route::delete('/settings/cookies', [SettingsController::class, 'deleteCookies'])->name('settings.cookies.delete');
     Route::get('/settings/check-missing-videos', [SettingsController::class, 'checkMissingVideos']);
