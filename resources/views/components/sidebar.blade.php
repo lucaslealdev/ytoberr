@@ -1,5 +1,8 @@
 <div id="sidebar" class="hidden md:flex md:flex-col w-64 bg-gray-900 h-full p-4 fixed md:static z-50">
-    <div class="flex justify-between items-center mb-8">
+    {{-- min-h-[38px] matches the rendered height of the top nav's search input (layouts/app.blade.php),
+         which is what stretches that nav row taller than plain text — without it, "Ytoberr" here
+         sits a few pixels higher than the page title next to the search bar. --}}
+    <div class="flex justify-between items-center mb-8 min-h-[38px]">
         <a href="/" class="text-xl font-bold text-gray-100">Ytoberr</a>
         <button id="close-sidebar" class="md:hidden text-gray-400 hover:text-white" aria-label="Close menu">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
