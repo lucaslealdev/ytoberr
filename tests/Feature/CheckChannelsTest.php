@@ -630,6 +630,48 @@ BASH);
         unlink($mockYtDlp);
     }
 
+    public function test_check_channels_never_re_adds_a_manually_blacklisted_video()
+    {
+        // Regression test for VideoController::destroy()'s "don't download this video again"
+        // option: it keeps the row around (status=deleted) specifically so this "already
+        // known" check treats it as such and never re-queues it, even though it still shows
+        // up in the channel's last-10-uploads listing.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_blacklisted_chan',
+            'name' => 'Blacklisted Video Channel',
+            'url' => 'https://www.youtube.com/@blacklisted_video_channel',
+            'download_quality' => '720p',
+        ]);
+
+        Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'blacklisted_vid',
+            'title' => 'Blacklisted Video',
+            'published_at' => now(),
+            'status' => 'deleted',
+            'prevent_download' => true,
+            'unavailable_reason' => 'Manually deleted',
+        ]);
+
+        $videos = [[
+            'id' => 'blacklisted_vid',
+            'title' => 'Blacklisted Video',
+            'upload_date' => now()->format('Ymd'),
+            'was_live' => false,
+            'media_type' => null,
+        ]];
+
+        $mockYtDlp = $this->mockYtDlpWithVideos('blacklisted_video', $videos);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+
+        $this->assertSame(1, Video::where('youtube_id', 'blacklisted_vid')->count());
+        $this->assertSame('deleted', Video::where('youtube_id', 'blacklisted_vid')->first()->status);
+
+        unlink($mockYtDlp);
+    }
+
     public function test_check_channels_does_not_permanently_blacklist_a_video_after_a_single_transient_failure()
     {
         // Regression test: yt-dlp/YouTube's bot-detection (or a JS-runtime hiccup) can produce a

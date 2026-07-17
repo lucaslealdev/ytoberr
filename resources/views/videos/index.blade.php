@@ -40,4 +40,6 @@
     </div>
 
     {{ $videos->links('components.pagination') }}
+
+    @include('videos._video-modals')
 @endsection
