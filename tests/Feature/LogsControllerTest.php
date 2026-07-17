@@ -109,6 +109,27 @@ class LogsControllerTest extends TestCase
         $response->assertSee('No log entries found.');
     }
 
+    public function test_logs_page_shows_a_copy_button_with_the_full_entry_including_stack_trace()
+    {
+        Setting::set('advanced_mode', '1');
+        $user = User::factory()->create();
+
+        file_put_contents($this->logPath,
+            "[2026-07-15 10:05:00] local.ERROR: Something broke\n".
+            "#0 /app/Foo.php(12): bar()\n".
+            "#1 {main}\n"
+        );
+
+        $response = $this->actingAs($user)->get('/logs');
+
+        $response->assertStatus(200);
+        $response->assertSee('copy-log-entry', false);
+        $response->assertSee(
+            "data-copy-text=\"[2026-07-15 10:05:00] ERROR: Something broke\n\n#0 /app/Foo.php(12): bar()\n#1 {main}\"",
+            false
+        );
+    }
+
     public function test_logs_page_shows_empty_state_when_log_file_exists_but_is_empty()
     {
         Setting::set('advanced_mode', '1');
