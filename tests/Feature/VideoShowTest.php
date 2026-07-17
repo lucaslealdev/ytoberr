@@ -102,6 +102,166 @@ class VideoShowTest extends TestCase
         );
     }
 
+    public function test_video_show_page_clamps_description_with_a_hidden_show_more_toggle()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_description_chan',
+            'name' => 'Description Channel',
+            'url' => 'https://example.com/description',
+        ]);
+
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'description_vid',
+            'title' => 'Description Video',
+            'description' => "Line one.\nLine two.\nLine three.\nLine four.\nLine five.",
+            'published_at' => now(),
+            'status' => 'completed',
+        ]);
+
+        $response = $this->actingAs($user)->get('/videos/'.$video->id);
+
+        $response->assertStatus(200);
+        $response->assertSee('id="video-description" class="text-gray-300 text-sm whitespace-pre-line leading-relaxed line-clamp-4"', false);
+        // The toggle always renders (whether the clamp actually truncates depends on the
+        // rendered width/font, which only JS can determine via scrollHeight vs clientHeight),
+        // but it starts hidden so it only appears once that check reveals real overflow.
+        $response->assertSee('id="toggle-video-description" class="hidden', false);
+        $response->assertSee('Show more');
+    }
+
+    public function test_video_show_page_turns_a_url_in_the_description_into_a_new_tab_link()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_description_link_chan',
+            'name' => 'Description Link Channel',
+            'url' => 'https://example.com/descriptionlink',
+        ]);
+
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'description_link_vid',
+            'title' => 'Description Link Video',
+            'description' => 'Check out my site: https://example.com/mysite for more.',
+            'published_at' => now(),
+            'status' => 'completed',
+        ]);
+
+        $response = $this->actingAs($user)->get('/videos/'.$video->id);
+
+        $response->assertStatus(200);
+        $response->assertSee(
+            '<a href="https://example.com/mysite" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline break-all">https://example.com/mysite</a>',
+            false
+        );
+    }
+
+    public function test_video_show_page_keeps_a_urls_query_string_ampersands_intact_in_the_link()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_description_query_chan',
+            'name' => 'Description Query Channel',
+            'url' => 'https://example.com/descriptionquery',
+        ]);
+
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'description_query_vid',
+            'title' => 'Description Query Video',
+            'description' => 'Playlist: https://example.com/watch?v=abc&list=xyz&index=2',
+            'published_at' => now(),
+            'status' => 'completed',
+        ]);
+
+        $response = $this->actingAs($user)->get('/videos/'.$video->id);
+
+        $response->assertStatus(200);
+        // The "&" query separators must survive as part of one single link (as "&amp;",
+        // the correctly-escaped form for an HTML attribute), rather than the regex treating
+        // each "&" as ending the URL and leaving the rest as unlinked trailing text.
+        $response->assertSee(
+            '<a href="https://example.com/watch?v=abc&amp;list=xyz&amp;index=2" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline break-all">https://example.com/watch?v=abc&amp;list=xyz&amp;index=2</a>',
+            false
+        );
+    }
+
+    public function test_video_show_page_excludes_trailing_punctuation_from_a_linked_url()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_description_punct_chan',
+            'name' => 'Description Punctuation Channel',
+            'url' => 'https://example.com/descriptionpunct',
+        ]);
+
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'description_punct_vid',
+            'title' => 'Description Punctuation Video',
+            'description' => 'See https://example.com/page. Thanks!',
+            'published_at' => now(),
+            'status' => 'completed',
+        ]);
+
+        $response = $this->actingAs($user)->get('/videos/'.$video->id);
+
+        $response->assertStatus(200);
+        $response->assertSee('<a href="https://example.com/page" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline break-all">https://example.com/page</a>. Thanks!', false);
+    }
+
+    public function test_video_show_page_escapes_html_in_the_description_instead_of_rendering_it()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_description_xss_chan',
+            'name' => 'Description XSS Channel',
+            'url' => 'https://example.com/descriptionxss',
+        ]);
+
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'description_xss_vid',
+            'title' => 'Description XSS Video',
+            'description' => '<script>alert(1)</script> visit https://example.com now',
+            'published_at' => now(),
+            'status' => 'completed',
+        ]);
+
+        $response = $this->actingAs($user)->get('/videos/'.$video->id);
+
+        $response->assertStatus(200);
+        $response->assertDontSee('<script>alert(1)</script>', false);
+        $response->assertSee('&lt;script&gt;alert(1)&lt;/script&gt;', false);
+        $response->assertSee('<a href="https://example.com" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline break-all">https://example.com</a>', false);
+    }
+
+    public function test_video_show_page_omits_description_toggle_when_video_has_no_description()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_no_description_chan',
+            'name' => 'No Description Channel',
+            'url' => 'https://example.com/nodescription',
+        ]);
+
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'no_description_vid',
+            'title' => 'No Description Video',
+            'published_at' => now(),
+            'status' => 'completed',
+        ]);
+
+        $response = $this->actingAs($user)->get('/videos/'.$video->id);
+
+        $response->assertStatus(200);
+        $response->assertDontSee('toggle-video-description', false);
+        $response->assertDontSee('video-description', false);
+    }
+
     public function test_video_show_page_displays_publish_time_duration_file_size_and_youtube_link()
     {
         $user = User::factory()->create();

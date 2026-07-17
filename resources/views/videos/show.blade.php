@@ -63,7 +63,10 @@
                     @endif
                 </div>
                 @if ($video->description)
-                    <p class="text-gray-300 text-sm whitespace-pre-line leading-relaxed mb-4">{{ $video->description }}</p>
+                    <div class="mb-4">
+                        <p id="video-description" class="text-gray-300 text-sm whitespace-pre-line leading-relaxed line-clamp-4">{!! $video->descriptionHtml() !!}</p>
+                        <button type="button" id="toggle-video-description" class="hidden text-blue-400 hover:text-blue-300 text-xs font-semibold mt-1.5">Show more</button>
+                    </div>
                 @endif
 
                 <!-- Details -->
@@ -128,4 +131,28 @@
     </div>
 
     @include('videos._video-modals')
+
+    @if ($video->description)
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const description = document.getElementById('video-description');
+                const toggle = document.getElementById('toggle-video-description');
+
+                // Only worth a "Show more" if the clamp is actually cutting text off —
+                // scrollHeight exceeds clientHeight exactly when the 4-line clamp is truncating.
+                if (description.scrollHeight <= description.clientHeight + 1) {
+                    return;
+                }
+
+                toggle.classList.remove('hidden');
+                let expanded = false;
+                toggle.addEventListener('click', function () {
+                    expanded = !expanded;
+                    description.classList.toggle('line-clamp-4', !expanded);
+                    description.classList.toggle('line-clamp-none', expanded);
+                    toggle.textContent = expanded ? 'Show less' : 'Show more';
+                });
+            });
+        </script>
+    @endif
 @endsection
