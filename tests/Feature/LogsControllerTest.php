@@ -109,6 +109,19 @@ class LogsControllerTest extends TestCase
         $response->assertSee('No log entries found.');
     }
 
+    public function test_logs_page_shows_empty_state_when_log_file_exists_but_is_empty()
+    {
+        Setting::set('advanced_mode', '1');
+        $user = User::factory()->create();
+
+        file_put_contents($this->logPath, '');
+
+        $response = $this->actingAs($user)->get('/logs');
+
+        $response->assertStatus(200);
+        $response->assertSee('No log entries found.');
+    }
+
     public function test_logs_page_handles_a_large_log_file_and_still_shows_the_most_recent_entry()
     {
         Setting::set('advanced_mode', '1');

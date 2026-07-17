@@ -60,6 +60,13 @@ class LogsController extends Controller
         }
 
         $size = filesize($path);
+
+        if ($size === 0) {
+            fclose($handle);
+
+            return [];
+        }
+
         $readBytes = min($size, self::TAIL_BYTES);
         fseek($handle, -$readBytes, SEEK_END);
         $chunk = fread($handle, $readBytes);
