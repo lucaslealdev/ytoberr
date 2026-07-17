@@ -75,6 +75,23 @@ class LogsControllerTest extends TestCase
         $this->assertTrue(strpos($content, 'Second message') < strpos($content, 'First message'), 'Newest entry should be listed first.');
     }
 
+    public function test_logs_page_displays_timestamps_converted_to_the_display_timezone()
+    {
+        config(['app.display_timezone' => 'America/Sao_Paulo']);
+        Setting::set('advanced_mode', '1');
+        $user = User::factory()->create();
+
+        // Written by Monolog in UTC (app.timezone stays fixed at UTC) — the page should show
+        // it converted to display_timezone (UTC-3), not the raw UTC value.
+        file_put_contents($this->logPath, "[2026-07-15 13:00:00] local.INFO: UTC entry\n");
+
+        $response = $this->actingAs($user)->get('/logs');
+
+        $response->assertStatus(200);
+        $response->assertSee('2026-07-15 10:00:00');
+        $response->assertDontSee('13:00:00');
+    }
+
     public function test_logs_page_shows_multiline_details_behind_a_details_toggle()
     {
         Setting::set('advanced_mode', '1');

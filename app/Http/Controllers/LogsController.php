@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
+
 class LogsController extends Controller
 {
     /**
@@ -84,7 +86,10 @@ class LogsController extends Controller
                 }
 
                 $current = [
-                    'timestamp' => $matches[1],
+                    // Monolog writes timestamps in app.timezone (fixed at UTC, see config/app.php)
+                    // regardless of the container's TZ env var — convert to display_timezone here,
+                    // the same conversion applied to video publish/download times.
+                    'timestamp' => Carbon::parse($matches[1], 'UTC')->setTimezone(config('app.display_timezone'))->format('Y-m-d H:i:s'),
                     'level' => strtoupper($matches[2]),
                     'message' => $matches[3],
                     'details' => '',
