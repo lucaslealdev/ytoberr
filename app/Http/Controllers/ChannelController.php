@@ -70,7 +70,6 @@ class ChannelController extends Controller
 
         $channelName = $data['channel'] ?? $data['uploader'] ?? 'Unknown';
         $channelId = $data['channel_id'] ?? 'unknown_'.uniqid();
-        $localThumbnailPath = null;
 
         $existingChannel = Channel::where('youtube_id', $channelId)->first();
         if ($existingChannel) {
@@ -80,27 +79,7 @@ class ChannelController extends Controller
         }
 
         try {
-            $channel = Channel::create([
-                'youtube_id' => $channelId,
-                'name' => $channelName,
-                'url' => $url,
-                'profile_image_path' => $localThumbnailPath,
-                'download_quality' => '720p',
-                'description' => $data['description'] ?? null,
-            ]);
-
-            // Now handle avatar/banner/fanart using new service.
-            // This service now handles everything and stores it in channels/<id>/
-            Log::info("Fetching and storing channel images for {$channelName} ({$channelId})");
-            app(ChannelService::class)->fetchAndStoreChannelImages($channel);
-
-            // Update channel with the poster path if it exists
-            $posterPath = 'channels/'.$channel->id.'/poster.jpg';
-            if (Storage::disk('public')->exists($posterPath)) {
-                $channel->update(['profile_image_path' => $posterPath]);
-            }
-
-            Log::info("Finished fetching and storing channel images for {$channelName} ({$channelId})");
+            $channel = app(ChannelService::class)->createChannel($channelId, $channelName, $url, $data['description'] ?? null, '720p');
 
             CheckChannelForNewVideosJob::dispatch($channel);
 

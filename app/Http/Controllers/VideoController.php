@@ -2,9 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Channel;
 use App\Models\Video;
+use App\Services\ChannelService;
 use App\Services\VideoDeletionService;
+use App\Services\YtDlpWrapper;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class VideoController extends Controller
 {
@@ -44,6 +49,71 @@ class VideoController extends Controller
         $videos = $query->paginate(12)->withQueryString();
 
         return view('videos.index', compact('videos', 'search', 'sort'));
+    }
+
+    /**
+     * Queue a single video for download from its URL, registering its channel first if this
+     * is the first video seen from it. The chosen quality is applied to the channel (there's
+     * no per-video quality — DownloadNextVideo always resolves quality from video->channel),
+     * so it also becomes that channel's quality for every future download, not just this one.
+     */
+    public function store(Request $request)
+    {
+        $request->validate([
+            'url' => ['required', 'url'],
+            'quality' => ['required', 'in:480p,720p,1080p'],
+        ]);
+
+        $wrapper = app(YtDlpWrapper::class);
+        $metadata = $wrapper->getMetadata($request->url, [], ['-J']);
+
+        if (! $metadata || ($metadata['_type'] ?? 'video') !== 'video' || empty($metadata['id'])) {
+            return back()->withErrors(['url' => 'Could not fetch video information. Make sure this is a single video URL.']);
+        }
+
+        $youtubeId = $metadata['id'];
+
+        if (Video::where('youtube_id', $youtubeId)->exists()) {
+            return back()->withErrors(['url' => 'This video has already been added.']);
+        }
+
+        $channelYoutubeId = $metadata['channel_id'] ?? null;
+        $channelUrl = $metadata['channel_url'] ?? $metadata['uploader_url'] ?? null;
+        $channelName = $metadata['channel'] ?? $metadata['uploader'] ?? 'Unknown';
+
+        if (! $channelYoutubeId || ! $channelUrl) {
+            return back()->withErrors(['url' => 'Could not determine the channel for this video.']);
+        }
+
+        $channel = Channel::where('youtube_id', $channelYoutubeId)->first();
+
+        if ($channel) {
+            $channel->update(['download_quality' => $request->quality]);
+        } else {
+            try {
+                $channel = app(ChannelService::class)->createChannel($channelYoutubeId, $channelName, $channelUrl, null, $request->quality);
+            } catch (\Exception $e) {
+                Log::error('Database error while creating channel from video URL: '.$e->getMessage());
+
+                return back()->withErrors(['url' => 'Database error: '.$e->getMessage()]);
+            }
+        }
+
+        $publishedAt = isset($metadata['timestamp'])
+            ? Carbon::createFromTimestamp($metadata['timestamp'])
+            : (isset($metadata['upload_date']) ? Carbon::parse($metadata['upload_date']) : now());
+
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => $youtubeId,
+            'title' => $metadata['title'] ?? 'Unknown Title',
+            'description' => $metadata['description'] ?? null,
+            'published_at' => $publishedAt->toDateTimeString(),
+            'duration' => $metadata['duration'] ?? null,
+            'status' => 'pending',
+        ]);
+
+        return redirect('/videos')->with('status', "\"{$video->title}\" has been added to the download queue.");
     }
 
     public function show(Video $video)
