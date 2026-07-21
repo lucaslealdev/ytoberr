@@ -34,7 +34,7 @@
             <h3 class="text-lg font-semibold text-white mb-4">System Tools</h3>
             <div class="space-y-4">
                 <div>
-                    <p class="text-gray-400 text-sm">yt-dlp version: <span class="text-white">{{ trim($ytDlpVersion) }}</span></p>
+                    <p class="text-gray-400 text-sm">yt-dlp version: <span id="ytdlp-version" class="text-white">Checking&hellip;</span></p>
                 </div>
                 <form action="/settings/update-tools" method="POST">
                     @csrf
@@ -342,6 +342,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            // yt-dlp takes the better part of a second to report its own version, so it's
+            // fetched here instead of blocking the page's initial render.
+            fetch('/settings/ytdlp-version')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('ytdlp-version').textContent = data.version;
+                })
+                .catch(() => {
+                    document.getElementById('ytdlp-version').textContent = 'Unknown';
+                });
+
             const modal = document.getElementById('missing-videos-modal');
             const modalContent = document.getElementById('modal-content');
             const btnUpdateIndex = document.getElementById('btn-update-index');

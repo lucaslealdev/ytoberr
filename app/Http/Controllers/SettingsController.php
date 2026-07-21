@@ -17,10 +17,6 @@ class SettingsController extends Controller
 {
     public function index(UpdateChecker $updateChecker, BackupService $backups)
     {
-        $ytDlp = config('services.ytdlp_path', base_path('bin/yt-dlp'));
-
-        $ytDlpVersion = shell_exec(escapeshellarg($ytDlp).' --version');
-
         $storagePath = Setting::getStoragePath();
         $cacheCount = YtDlpCache::count();
 
@@ -38,10 +34,24 @@ class SettingsController extends Controller
         $cookiesUpdatedAt = $cookiesConfigured ? Carbon::createFromTimestamp(filemtime($cookiesPath)) : null;
 
         return view('settings.index', compact(
-            'ytDlpVersion', 'storagePath', 'cacheCount', 'latestVersion', 'updateAvailable',
+            'storagePath', 'cacheCount', 'latestVersion', 'updateAvailable',
             'ytdlpDelaySeconds', 'advancedModeEnabled', 'lightModeEnabled', 'warnings', 'backupsList',
             'cookiesConfigured', 'cookiesUpdatedAt'
         ));
+    }
+
+    /**
+     * Shelling out to yt-dlp just to print its version takes the better part of a second
+     * (interpreter/self-extraction startup), which made the Settings page itself feel slow
+     * to open. Fetched asynchronously by the page's JS instead of blocking index() above.
+     */
+    public function ytdlpVersion()
+    {
+        $ytDlp = config('services.ytdlp_path', base_path('bin/yt-dlp'));
+
+        $version = trim(shell_exec(escapeshellarg($ytDlp).' --version') ?? '');
+
+        return response()->json(['version' => $version !== '' ? $version : 'Unknown']);
     }
 
     public function updateProfile(Request $request)
