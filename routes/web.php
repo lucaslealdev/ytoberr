@@ -37,6 +37,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/media/{path}', [MediaController::class, 'show'])->where('path', '.*')->name('media.show');
     Route::get('/channel-media/{path}', [MediaController::class, 'showPublicDisk'])->where('path', '.*')->name('media.channel.show');
     Route::get('/settings', [SettingsController::class, 'index']);
+    Route::get('/settings/ytdlp-version', [SettingsController::class, 'ytdlpVersion']);
     Route::post('/settings/profile', [SettingsController::class, 'updateProfile']);
     Route::post('/settings/update-tools', [SettingsController::class, 'updateTools']);
     Route::post('/settings/storage-path', [SettingsController::class, 'updateStoragePath']);

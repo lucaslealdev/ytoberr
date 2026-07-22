@@ -25,7 +25,7 @@ class SettingsControllerTest extends TestCase
         parent::setUp();
         Cache::flush();
 
-        // The settings page shells out to yt-dlp for its version on every request;
+        // The /settings/ytdlp-version endpoint shells out to yt-dlp for its version;
         // stub it out so the suite doesn't depend on the real binary being installed.
         $this->mockYtDlp = storage_path('app/temp/mock_ytdlp_settings.sh');
         file_put_contents($this->mockYtDlp, "#!/bin/bash\necho '2026.01.01'\n");
@@ -61,11 +61,9 @@ class SettingsControllerTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_index_renders_with_ytdlp_version_and_cache_count()
+    public function test_index_renders_with_cache_count_without_blocking_on_ytdlp_version()
     {
         $user = User::factory()->create();
-
-        $expectedVersion = '2026.01.01';
 
         YtDlpCache::create([
             'key' => 'cache-key-1',
@@ -78,15 +76,41 @@ class SettingsControllerTest extends TestCase
             'expires_at' => now()->addHour(),
         ]);
 
+        // Point at a binary that would hang/fail if index() ever shelled out to it directly,
+        // proving the page itself no longer depends on yt-dlp's (slow) startup time.
+        config(['services.ytdlp_path' => '/nonexistent/yt-dlp']);
+
         $response = $this->actingAs($user)->get('/settings');
 
         $response->assertStatus(200);
-        $response->assertSee($expectedVersion);
+        $response->assertSee('id="ytdlp-version"', false);
 
         $this->assertMatchesRegularExpression(
             '/Total cached yt-dlp metadata queries:.*?<span[^>]*>2<\/span>/s',
             $response->getContent()
         );
+    }
+
+    public function test_ytdlp_version_endpoint_returns_the_version_reported_by_the_binary()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get('/settings/ytdlp-version');
+
+        $response->assertStatus(200);
+        $response->assertExactJson(['version' => '2026.01.01']);
+    }
+
+    public function test_ytdlp_version_endpoint_reports_unknown_when_the_binary_is_unavailable()
+    {
+        $user = User::factory()->create();
+
+        config(['services.ytdlp_path' => '/nonexistent/yt-dlp']);
+
+        $response = $this->actingAs($user)->get('/settings/ytdlp-version');
+
+        $response->assertStatus(200);
+        $response->assertExactJson(['version' => 'Unknown']);
     }
 
     public function test_index_shows_update_notice_when_a_newer_version_is_available()
