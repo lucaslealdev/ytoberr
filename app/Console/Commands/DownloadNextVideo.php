@@ -6,6 +6,7 @@ use App\Models\Setting;
 use App\Models\Video;
 use App\Models\Warning;
 use App\Services\PlexAssetService;
+use App\Services\VideoCompressionService;
 use App\Services\YtDlpWrapper;
 use App\Support\PlexNaming;
 use Illuminate\Console\Command;
@@ -40,7 +41,7 @@ class DownloadNextVideo extends Command
      */
     private const PROGRESS_MARKER = 'YTOBERR_PROGRESS';
 
-    public function handle(PlexAssetService $plexAssets, YtDlpWrapper $ytDlpWrapper)
+    public function handle(PlexAssetService $plexAssets, YtDlpWrapper $ytDlpWrapper, VideoCompressionService $videoCompression)
     {
         $this->info('Starting download queue processor...');
 
@@ -78,7 +79,7 @@ class DownloadNextVideo extends Command
                 }
             }
 
-            $this->processVideo($video, $plexAssets, $ytDlpWrapper);
+            $this->processVideo($video, $plexAssets, $ytDlpWrapper, $videoCompression);
             $processedCount++;
         }
 
@@ -95,7 +96,7 @@ class DownloadNextVideo extends Command
      * loop there can call this once per pending video without any single video's outcome
      * (success or failure) terminating the whole command.
      */
-    private function processVideo(Video $video, PlexAssetService $plexAssets, YtDlpWrapper $ytDlpWrapper): void
+    private function processVideo(Video $video, PlexAssetService $plexAssets, YtDlpWrapper $ytDlpWrapper, VideoCompressionService $videoCompression): void
     {
         $this->info("Processing video: {$video->title} (ID: {$video->youtube_id})");
 
@@ -271,6 +272,13 @@ class DownloadNextVideo extends Command
 
             // Reset consecutive failures settings on success
             Setting::set('consecutive_failures', '0');
+
+            // Automatic background HEVC compression, only when the module is enabled in
+            // Settings. Off by default; videos can still be optimized individually via the
+            // "Optimize" button regardless of this setting.
+            if (Setting::compressionEnabled()) {
+                $videoCompression->queue($video);
+            }
 
             $this->info("Successfully downloaded video: {$video->title}");
             $this->cleanup($tempDir);
