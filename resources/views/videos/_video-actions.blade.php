@@ -13,6 +13,10 @@
     data-video-title="{{ $video->title }}"
     data-delete-url="{{ route('videos.destroy', $video) }}"
     data-redirect-to="{{ $redirectTo ?? '' }}"
+    @if ($video->needsOptimization())
+        data-optimize-url="{{ route('videos.optimize', $video) }}"
+        data-compression-status-url="{{ route('videos.compression-status', $video) }}"
+    @endif
 >
     <button
         type="button"
@@ -25,6 +29,15 @@
     </button>
 
     <div class="video-actions-dropdown hidden absolute right-0 mt-2 w-52 bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1 text-sm z-30">
+        @if ($video->needsOptimization())
+            <button
+                type="button"
+                class="video-optimize-btn w-full text-left px-4 py-2 text-blue-400 hover:bg-gray-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                {{ $video->isCompressing() ? 'disabled' : '' }}
+            >
+                <span>⚡</span> <span class="optimize-label">{{ $video->isCompressing() ? 'Optimizing…' : 'Optimize' }}</span>
+            </button>
+        @endif
         <button type="button" class="video-open-delete w-full text-left px-4 py-2 text-red-400 hover:bg-gray-700 flex items-center gap-2">
             <span>🗑️</span> Delete Video
         </button>

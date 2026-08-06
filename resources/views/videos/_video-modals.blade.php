@@ -105,5 +105,94 @@
         // No preventDefault(): deleting still submits natively and follows the server's
         // redirect — back to the current listing page by default, or to the video's channel
         // (or the videos index) when deleted from its own show page.
+
+        // --- Optimize video (background HEVC compression) ---
+        function applyCompressionStatus(wrapper, data) {
+            const btn = wrapper.querySelector('.video-optimize-btn');
+            if (!btn) {
+                return;
+            }
+
+            // Already HEVC (this run, or a prior one): the action no longer applies, so the
+            // button disappears entirely rather than just re-enabling.
+            if (data.is_hevc) {
+                btn.remove();
+                return;
+            }
+
+            const label = btn.querySelector('.optimize-label');
+            const inProgress = data.compression_status === 'queued' || data.compression_status === 'processing';
+            btn.disabled = inProgress;
+            if (label) {
+                label.textContent = inProgress ? 'Optimizing…' : 'Optimize';
+            }
+        }
+
+        // Only polls buttons currently showing as disabled/in-progress, so pages with no
+        // compression running don't make any network calls at all.
+        function pollCompressionStatuses() {
+            document.querySelectorAll('.video-actions-menu-wrapper[data-compression-status-url]').forEach(function (wrapper) {
+                const btn = wrapper.querySelector('.video-optimize-btn');
+                if (!btn || !btn.disabled) {
+                    return;
+                }
+
+                fetch(wrapper.dataset.compressionStatusUrl, {
+                    headers: { 'Accept': 'application/json' },
+                })
+                    .then(function (response) { return response.ok ? response.json() : null; })
+                    .then(function (data) {
+                        if (data) {
+                            applyCompressionStatus(wrapper, data);
+                        }
+                    })
+                    .catch(function () {});
+            });
+        }
+
+        setInterval(pollCompressionStatuses, 8000);
+
+        document.addEventListener('click', function (event) {
+            const btn = event.target.closest('.video-optimize-btn');
+            if (!btn) {
+                return;
+            }
+
+            closeAllVideoDropdowns();
+
+            const wrapper = btn.closest('.video-actions-menu-wrapper');
+            const label = btn.querySelector('.optimize-label');
+
+            btn.disabled = true;
+            if (label) {
+                label.textContent = 'Optimizing…';
+            }
+
+            fetch(wrapper.dataset.optimizeUrl, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json',
+                },
+            })
+                .then(function (response) {
+                    if (!response.ok) {
+                        return response.json().then(function (data) {
+                            throw new Error(data.message || 'Failed to start optimization.');
+                        });
+                    }
+                    return response.json();
+                })
+                .then(function (data) {
+                    window.showToast(data.message);
+                })
+                .catch(function (error) {
+                    btn.disabled = false;
+                    if (label) {
+                        label.textContent = 'Optimize';
+                    }
+                    window.showToast(error.message, true);
+                });
+        });
     });
 </script>
