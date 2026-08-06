@@ -33,6 +33,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/videos', [VideoController::class, 'store'])->name('videos.store');
     Route::get('/videos/{video}', [VideoController::class, 'show']);
     Route::post('/videos/{video}/retry', [VideoController::class, 'retry'])->name('videos.retry');
+    Route::post('/videos/{video}/optimize', [VideoController::class, 'optimize'])->name('videos.optimize');
+    Route::get('/videos/{video}/compression-status', [VideoController::class, 'compressionStatus'])->name('videos.compression-status');
     Route::delete('/videos/{video}', [VideoController::class, 'destroy'])->name('videos.destroy');
     Route::get('/media/{path}', [MediaController::class, 'show'])->where('path', '.*')->name('media.show');
     Route::get('/channel-media/{path}', [MediaController::class, 'showPublicDisk'])->where('path', '.*')->name('media.channel.show');
@@ -44,6 +46,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/settings/ytdlp-delay', [SettingsController::class, 'updateYtdlpDelay']);
     Route::post('/settings/advanced-mode', [SettingsController::class, 'updateAdvancedMode']);
     Route::post('/settings/light-mode', [SettingsController::class, 'updateLightMode']);
+    Route::post('/settings/compression-enabled', [SettingsController::class, 'updateCompressionEnabled']);
     Route::post('/settings/cookies', [SettingsController::class, 'updateCookies'])->name('settings.cookies.update');
     Route::delete('/settings/cookies', [SettingsController::class, 'deleteCookies'])->name('settings.cookies.delete');
     Route::get('/settings/check-missing-videos', [SettingsController::class, 'checkMissingVideos']);

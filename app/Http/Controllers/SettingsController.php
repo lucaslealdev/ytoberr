@@ -26,6 +26,7 @@ class SettingsController extends Controller
         $ytdlpDelaySeconds = Setting::ytdlpDelaySeconds();
         $advancedModeEnabled = Setting::advancedModeEnabled();
         $lightModeEnabled = Setting::lightModeEnabled();
+        $compressionEnabled = Setting::compressionEnabled();
         $warnings = Warning::with('video')->latest()->get();
         $backupsList = $backups->list();
 
@@ -35,7 +36,7 @@ class SettingsController extends Controller
 
         return view('settings.index', compact(
             'storagePath', 'cacheCount', 'latestVersion', 'updateAvailable',
-            'ytdlpDelaySeconds', 'advancedModeEnabled', 'lightModeEnabled', 'warnings', 'backupsList',
+            'ytdlpDelaySeconds', 'advancedModeEnabled', 'lightModeEnabled', 'compressionEnabled', 'warnings', 'backupsList',
             'cookiesConfigured', 'cookiesUpdatedAt'
         ));
     }
@@ -138,6 +139,13 @@ class SettingsController extends Controller
         Setting::set('light_mode', $request->boolean('light_mode') ? '1' : '0');
 
         return back()->with('status', 'Theme updated successfully!');
+    }
+
+    public function updateCompressionEnabled(Request $request)
+    {
+        Setting::set('compression_enabled', $request->boolean('compression_enabled') ? '1' : '0');
+
+        return back()->with('status', 'Compression module updated successfully!');
     }
 
     public function updateCookies(Request $request)

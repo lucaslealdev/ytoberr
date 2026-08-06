@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Channel;
 use App\Models\Video;
 use App\Services\ChannelService;
+use App\Services\VideoCompressionService;
 use App\Services\VideoDeletionService;
 use App\Services\YtDlpWrapper;
 use Carbon\Carbon;
@@ -13,7 +14,10 @@ use Illuminate\Support\Facades\Log;
 
 class VideoController extends Controller
 {
-    public function __construct(private VideoDeletionService $videoDeletionService) {}
+    public function __construct(
+        private VideoDeletionService $videoDeletionService,
+        private VideoCompressionService $videoCompressionService,
+    ) {}
 
     public function index(Request $request)
     {
@@ -154,6 +158,38 @@ class VideoController extends Controller
         ]);
 
         return back()->with('status', "\"{$video->title}\" has been re-queued for download.");
+    }
+
+    /**
+     * Queue a single video for background HEVC compression from the "Optimize" button, called
+     * via fetch() from the kebab menu (see videos/_video-modals.blade.php) rather than a full
+     * page navigation. Available regardless of Setting::compressionEnabled() — that setting only
+     * controls automatic compression right after a download finishes.
+     */
+    public function optimize(Video $video)
+    {
+        if (! $this->videoCompressionService->queue($video)) {
+            return response()->json(['message' => 'This video cannot be optimized right now.'], 422);
+        }
+
+        return response()->json([
+            'message' => 'Optimization started in the background.',
+            'compression_status' => $video->fresh()->compression_status,
+        ]);
+    }
+
+    /**
+     * Polled by the "Optimize" button's JS (see videos/_video-modals.blade.php) while a
+     * compression run is in flight, so the button re-enables or disappears on its own once the
+     * background job finishes without requiring a page reload.
+     */
+    public function compressionStatus(Video $video)
+    {
+        return response()->json([
+            'compression_status' => $video->compression_status,
+            'compression_progress_percent' => $video->compression_progress_percent,
+            'is_hevc' => $video->isHevc(),
+        ]);
     }
 
     /**
