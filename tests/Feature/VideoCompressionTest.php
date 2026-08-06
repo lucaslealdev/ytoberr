@@ -119,6 +119,18 @@ BASH;
         return $mock;
     }
 
+    public function test_compress_video_job_declares_a_timeout_generous_enough_for_a_multi_hour_encode()
+    {
+        [, $video] = $this->makeDownloadedVideo('timeout_property_vid');
+        $job = new CompressVideoJob($video);
+
+        // Laravel's queue worker kills a job after its own $timeout (default 60s if unset),
+        // independent of ffmpeg's own internal process timeout — this must be generous enough
+        // that the worker never kills a legitimately still-running multi-hour encode.
+        $this->assertGreaterThanOrEqual(6 * 3600, $job->timeout);
+        $this->assertTrue($job->failOnTimeout);
+    }
+
     public function test_compress_video_job_leaves_an_already_hevc_file_untouched()
     {
         [, $video, $fullPath] = $this->makeDownloadedVideo('already_hevc_vid');

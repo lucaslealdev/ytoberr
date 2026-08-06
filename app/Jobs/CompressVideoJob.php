@@ -21,6 +21,22 @@ class CompressVideoJob implements ShouldQueue
      */
     private const COMPRESS_TIMEOUT_SECONDS = 6 * 3600;
 
+    /**
+     * Laravel's own per-job watchdog (queue:work's SIGALRM-based timeout), independent of the
+     * ffmpeg process timeout enforced internally via YtDlpWrapper::runCommand(). This must be at
+     * least as generous as COMPRESS_TIMEOUT_SECONDS, or the worker's default 60-second timeout
+     * kills the job — and the still-running ffmpeg process with it — long before any legitimate
+     * multi-hour encode can finish.
+     */
+    public int $timeout = self::COMPRESS_TIMEOUT_SECONDS;
+
+    /**
+     * A timeout here means the encode is still genuinely running, not a transient failure —
+     * retrying just repeats the same many-hours-long wait for another attempt (up to 3x with the
+     * worker's default --tries), so let it fail outright instead.
+     */
+    public bool $failOnTimeout = true;
+
     public function __construct(public Video $video) {}
 
     public function handle(FfmpegService $ffmpeg): void
