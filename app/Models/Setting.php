@@ -78,6 +78,17 @@ class Setting extends Model
     }
 
     /**
+     * Whether downloaded videos are automatically queued for background HEVC compression once
+     * their download completes. Off by default — compression is CPU-intensive and takes real
+     * time, so it's opt-in rather than silently eating resources after every download. Videos
+     * can still be optimized individually via the "Optimize" button regardless of this setting.
+     */
+    public static function compressionEnabled(): bool
+    {
+        return self::get('compression_enabled', '0') === '1';
+    }
+
+    /**
      * Percentage of disk space used at $path (or storage_path() as a fallback, if $path
      * doesn't exist yet — e.g. a custom storage path that hasn't been created).
      */

@@ -8,12 +8,13 @@ Self-hosted web dashboard for local archiving and automated monitoring of YouTub
 - **Organized Archiving:** Downloaded videos are organized into directories: `{channel}/{year}/{month}/{video}.{ext}` (file saved exactly as downloaded by yt-dlp, without reprocessing).
 - **Plex Compatibility:** Plex-friendly naming with thumbnails saved as companion files (`{video}-thumb.jpg`).
 - **Quality Management:** Per-channel download quality setting.
+- **Video Compression:** Optional background re-encode of downloaded videos to the HEVC (H.265) codec, either automatically after each download (opt-in in Settings) or per-video via an "Optimize" button. The original file stays playable until the compressed one is ready to swap in; already-HEVC videos are left untouched.
 
 ## 🛠️ Tech Stack
 
 - **Backend:** Laravel 13.x (PHP 8.4)
 - **Database:** SQLite
-- **Download:** `yt-dlp` (`ffmpeg` is only used internally by yt-dlp to merge separate audio/video formats; the application never invokes ffmpeg directly). yt-dlp also needs a JavaScript runtime to reliably resolve YouTube's signature challenges — without one, some videos fail to download or only degraded formats are available. The Docker image bundles Node.js >= 22 for this; `make setup-bins` additionally fetches `deno` for non-Docker installs on glibc-based Linux (deno's official build doesn't support musl systems like Alpine, so it's skipped there automatically — install Node.js >= 22 yourself in that case).
+- **Download:** `yt-dlp`. `ffmpeg` is used both internally by yt-dlp (to merge separate audio/video formats) and directly by the application for the optional HEVC compression module above. yt-dlp also needs a JavaScript runtime to reliably resolve YouTube's signature challenges — without one, some videos fail to download or only degraded formats are available. The Docker image bundles Node.js >= 22 for this; `make setup-bins` additionally fetches `deno` for non-Docker installs on glibc-based Linux (deno's official build doesn't support musl systems like Alpine, so it's skipped there automatically — install Node.js >= 22 yourself in that case).
 
 ## ⚙️ Installation
 
