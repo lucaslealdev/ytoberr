@@ -174,6 +174,18 @@
         </div>
 
         <div class="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800 mb-6 break-inside-avoid">
+            <h3 class="text-lg font-semibold text-white mb-4">Video Compression</h3>
+            <p class="text-xs text-gray-500 mb-4">Automatically re-encodes each video to the HEVC (H.265) codec in the background right after it finishes downloading, shrinking its file size. The original stays fully playable until the compressed file is ready to swap in. Already-HEVC videos are left untouched. You can still optimize individual videos manually via their "Optimize" button regardless of this setting.</p>
+            <form action="/settings/compression-enabled" method="POST">
+                @csrf
+                <label class="flex items-center gap-2 text-gray-300 text-sm">
+                    <input type="checkbox" name="compression_enabled" value="1" {{ $compressionEnabled ? 'checked' : '' }} onchange="this.form.submit()" class="rounded bg-gray-800 border-gray-700">
+                    Automatically compress videos after download
+                </label>
+            </form>
+        </div>
+
+        <div class="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800 mb-6 break-inside-avoid">
             <h3 class="text-lg font-semibold text-white mb-4">Backup &amp; Restore</h3>
             <div class="space-y-4">
                 <form action="{{ route('settings.backups.create') }}" method="POST">
