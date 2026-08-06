@@ -70,7 +70,7 @@
                 @endif
 
                 <!-- Details -->
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm border-t border-gray-800 pt-4">
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 text-sm border-t border-gray-800 pt-4">
                     <div>
                         <p class="text-gray-500 text-xs uppercase tracking-wide mb-1">Published</p>
                         @if ($video->publishedAtLocal())
@@ -96,6 +96,14 @@
                     <div>
                         <p class="text-gray-500 text-xs uppercase tracking-wide mb-1">File Size</p>
                         <p class="text-gray-200">{{ $video->fileSize() ? \Illuminate\Support\Number::fileSize($video->fileSize(), precision: 1) : '—' }}</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 text-xs uppercase tracking-wide mb-1">Video Codec</p>
+                        <p class="text-gray-200">{{ $video->video_codec ? strtoupper($video->video_codec) : '—' }}</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 text-xs uppercase tracking-wide mb-1">Audio Codec</p>
+                        <p class="text-gray-200">{{ $video->audio_codec ? strtoupper($video->audio_codec) : '—' }}</p>
                     </div>
                 </div>
 

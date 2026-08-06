@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Setting;
 use App\Models\Video;
 use App\Models\Warning;
+use App\Services\FfmpegService;
 use App\Services\PlexAssetService;
 use App\Services\VideoCompressionService;
 use App\Services\YtDlpWrapper;
@@ -41,7 +42,7 @@ class DownloadNextVideo extends Command
      */
     private const PROGRESS_MARKER = 'YTOBERR_PROGRESS';
 
-    public function handle(PlexAssetService $plexAssets, YtDlpWrapper $ytDlpWrapper, VideoCompressionService $videoCompression)
+    public function handle(PlexAssetService $plexAssets, YtDlpWrapper $ytDlpWrapper, VideoCompressionService $videoCompression, FfmpegService $ffmpeg)
     {
         $this->info('Starting download queue processor...');
 
@@ -79,7 +80,7 @@ class DownloadNextVideo extends Command
                 }
             }
 
-            $this->processVideo($video, $plexAssets, $ytDlpWrapper, $videoCompression);
+            $this->processVideo($video, $plexAssets, $ytDlpWrapper, $videoCompression, $ffmpeg);
             $processedCount++;
         }
 
@@ -96,7 +97,7 @@ class DownloadNextVideo extends Command
      * loop there can call this once per pending video without any single video's outcome
      * (success or failure) terminating the whole command.
      */
-    private function processVideo(Video $video, PlexAssetService $plexAssets, YtDlpWrapper $ytDlpWrapper, VideoCompressionService $videoCompression): void
+    private function processVideo(Video $video, PlexAssetService $plexAssets, YtDlpWrapper $ytDlpWrapper, VideoCompressionService $videoCompression, FfmpegService $ffmpeg): void
     {
         $this->info("Processing video: {$video->title} (ID: {$video->youtube_id})");
 
@@ -268,6 +269,8 @@ class DownloadNextVideo extends Command
                 'downloaded_at' => now(),
                 'retries' => 0,
                 'last_error' => null,
+                'video_codec' => $ffmpeg->detectVideoCodec($targetFile),
+                'audio_codec' => $ffmpeg->detectAudioCodec($targetFile),
             ]);
 
             // Reset consecutive failures settings on success

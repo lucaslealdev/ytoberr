@@ -23,9 +23,23 @@ class FfmpegService
      */
     public function detectVideoCodec(string $filePath): ?string
     {
+        return $this->detectStreamCodec($filePath, 'v:0');
+    }
+
+    /**
+     * The audio stream's codec name (e.g. "aac", "opus", "mp3"), or null if it couldn't be
+     * determined (missing/corrupt file, no audio stream, ffprobe failure).
+     */
+    public function detectAudioCodec(string $filePath): ?string
+    {
+        return $this->detectStreamCodec($filePath, 'a:0');
+    }
+
+    private function detectStreamCodec(string $filePath, string $stream): ?string
+    {
         $ffprobe = config('services.ffprobe_path', base_path('bin/ffprobe'));
 
-        $command = "{$ffprobe} -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "
+        $command = "{$ffprobe} -v error -select_streams {$stream} -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "
             .escapeshellarg($filePath);
 
         [$output, $resultCode] = $this->processRunner->runCommand($command, self::PROBE_TIMEOUT_SECONDS);
