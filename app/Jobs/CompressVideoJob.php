@@ -64,9 +64,27 @@ class CompressVideoJob implements ShouldQueue
         if ($ffmpeg->isHevcCodec($codec)) {
             $video->update([
                 'video_codec' => 'hevc',
+                'audio_codec' => $ffmpeg->detectAudioCodec($fullPath),
                 'compression_status' => 'completed',
                 'compression_progress_percent' => 100,
                 'compression_error' => null,
+            ]);
+
+            return;
+        }
+
+        // Already an efficient codec (VP9/AV1): don't even attempt the transcode. This mainly
+        // catches videos downloaded before codec detection existed at download time (so
+        // needsOptimization() couldn't have filtered them out before this job was ever queued)
+        // — a CRF-based HEVC re-encode of these predictably comes out larger, not smaller (see
+        // FfmpegService::isAlreadyEfficientCodec()), so there's no point spending CPU on it.
+        if ($ffmpeg->isAlreadyEfficientCodec($codec)) {
+            $video->update([
+                'video_codec' => $codec,
+                'audio_codec' => $ffmpeg->detectAudioCodec($fullPath),
+                'compression_status' => 'skipped',
+                'compression_progress_percent' => 100,
+                'compression_error' => "Source codec ({$codec}) is already efficient; HEVC re-encode would not be smaller, so no conversion was attempted.",
             ]);
 
             return;
@@ -99,6 +117,28 @@ class CompressVideoJob implements ShouldQueue
             return;
         }
 
+        // Modern source codecs (VP9, AV1) are already extremely size-efficient — re-encoding them
+        // to HEVC at a quality-focused CRF can end up *larger* than the source instead of
+        // smaller. Since the whole point of "Optimize" is saving space, a losing result is
+        // discarded and the original file is kept exactly as-is, rather than replacing it with
+        // something bigger just because it's HEVC.
+        $originalSize = filesize($fullPath);
+        $compressedSize = filesize($tempOutput);
+
+        if ($originalSize !== false && $compressedSize !== false && $compressedSize >= $originalSize) {
+            Log::info("HEVC re-encode for video {$video->youtube_id} was not smaller than the original ({$compressedSize} vs {$originalSize} bytes); keeping the original file.");
+            $video->update([
+                'video_codec' => $codec,
+                'audio_codec' => $ffmpeg->detectAudioCodec($fullPath),
+                'compression_status' => 'skipped',
+                'compression_progress_percent' => 100,
+                'compression_error' => 'HEVC re-encode was not smaller than the original; original file kept.',
+            ]);
+            $this->cleanup($tempDir);
+
+            return;
+        }
+
         // If the source wasn't already .mkv, the video's stored path (and the file on disk)
         // moves to a .mkv extension so the MIME type MediaController::show() derives from it
         // (via response()->file(), extension-based) still matches the file's real container.
@@ -117,6 +157,7 @@ class CompressVideoJob implements ShouldQueue
         $video->update([
             'file_path' => $newRelativePath,
             'video_codec' => 'hevc',
+            'audio_codec' => $ffmpeg->detectAudioCodec($newFullPath),
             'file_size' => filesize($newFullPath) ?: null,
             'compression_status' => 'completed',
             'compression_progress_percent' => 100,

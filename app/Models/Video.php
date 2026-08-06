@@ -247,6 +247,16 @@ class Video extends Model
     }
 
     /**
+     * Whether this video's known codec (VP9/AV1 — mirrors FfmpegService::isAlreadyEfficientCodec())
+     * is already efficient enough that a CRF-based HEVC re-encode predictably comes out *larger*
+     * rather than smaller, so there's no point offering (or attempting) optimization at all.
+     */
+    public function hasAlreadyEfficientCodec(): bool
+    {
+        return in_array($this->video_codec, ['vp9', 'av1'], true);
+    }
+
+    /**
      * Whether a compression run (automatic or manually queued via the "Optimize" button) is
      * currently in flight for this video.
      */
@@ -257,13 +267,17 @@ class Video extends Model
 
     /**
      * Whether the "Optimize" action should be offered for this video: it's downloaded, its file
-     * still exists on disk, and it isn't already known to be HEVC. Videos downloaded before this
-     * feature existed have a null video_codec, so they're treated as needing optimization until
-     * a compression run confirms (or fixes) their codec.
+     * still exists on disk, it isn't already known to be HEVC, and its codec isn't already
+     * efficient enough that optimization couldn't realistically help. Videos downloaded before
+     * this feature existed have a null video_codec, so they're treated as needing optimization
+     * until a compression run confirms (or fixes) their codec.
      */
     public function needsOptimization(): bool
     {
-        return $this->status === 'completed' && $this->videoUrl() !== null && ! $this->isHevc();
+        return $this->status === 'completed'
+            && $this->videoUrl() !== null
+            && ! $this->isHevc()
+            && ! $this->hasAlreadyEfficientCodec();
     }
 
     /**

@@ -113,9 +113,13 @@
                 return;
             }
 
-            // Already HEVC (this run, or a prior one): the action no longer applies, so the
+            // No longer eligible — either confirmed HEVC now, or the run just revealed a codec
+            // (e.g. VP9/AV1) already efficient enough that optimizing wouldn't help — so the
             // button disappears entirely rather than just re-enabling.
-            if (data.is_hevc) {
+            if (!data.needs_optimization) {
+                if (data.compression_status === 'skipped') {
+                    window.showToast('Optimization skipped: this video\'s codec is already efficient enough that HEVC would not shrink it further.');
+                }
                 btn.remove();
                 return;
             }
@@ -125,6 +129,13 @@
             btn.disabled = inProgress;
             if (label) {
                 label.textContent = inProgress ? 'Optimizing…' : 'Optimize';
+            }
+
+            // Still eligible (not HEVC, not an already-efficient codec) but this particular run
+            // didn't pan out — e.g. a borderline source that just happened not to shrink this
+            // time. The button stays available in case a future attempt (or encoder change) does.
+            if (!inProgress && data.compression_status === 'skipped') {
+                window.showToast('Optimization skipped: the HEVC re-encode was not smaller than the original file.');
             }
         }
 

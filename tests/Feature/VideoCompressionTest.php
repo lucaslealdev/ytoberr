@@ -91,7 +91,10 @@ class VideoCompressionTest extends TestCase
 
     /**
      * Writes a fake ffmpeg that emits a couple of -progress lines and writes dummy "compressed"
-     * bytes to whatever path it's given as its final argument (the output path).
+     * bytes to whatever path it's given as its final argument (the output path). The output is
+     * deliberately shorter than makeDownloadedVideo()'s ~26-byte fixture content, so the
+     * "smaller than the original" check doesn't discard it — tests exercising that specific
+     * discard behavior use mockFfmpegWithLargerOutput() instead.
      */
     private function mockFfmpeg(bool $succeed = true): string
     {
@@ -104,7 +107,7 @@ echo "out_time=00:00:05.000"
 echo "progress=continue"
 echo "out_time=00:00:10.000"
 echo "progress=end"
-echo "compressed hevc video bytes" > "$output"
+printf 'hevc' > "$output"
 exit 0
 BASH
             : <<<'BASH'
@@ -113,6 +116,27 @@ echo "ffmpeg exploded" >&2
 exit 1
 BASH;
         file_put_contents($mock, $body);
+        chmod($mock, 0755);
+        config(['services.ffmpeg_path' => $mock]);
+
+        return $mock;
+    }
+
+    /**
+     * Writes a fake ffmpeg whose output is larger than makeDownloadedVideo()'s ~26-byte fixture
+     * content — simulating a source already using an efficient codec (VP9/AV1) where the HEVC
+     * re-encode ends up bigger, not smaller, than the original.
+     */
+    private function mockFfmpegWithLargerOutput(): string
+    {
+        $mock = storage_path('app/temp/mock_ffmpeg_'.uniqid().'.sh');
+        file_put_contents($mock, <<<'BASH'
+#!/bin/bash
+output="${@: -1}"
+echo "progress=end"
+printf 'this compressed output is deliberately larger than the tiny test fixture' > "$output"
+exit 0
+BASH);
         chmod($mock, 0755);
         config(['services.ffmpeg_path' => $mock]);
 
@@ -168,7 +192,7 @@ BASH;
         // stored file_path and the file on disk move to the new extension.
         $this->assertStringEndsWith('.mkv', $video->file_path);
         $this->assertFileDoesNotExist($fullPath);
-        $this->assertSame('compressed hevc video bytes'."\n", file_get_contents($newFullPath));
+        $this->assertSame('hevc', file_get_contents($newFullPath));
         $this->assertSame(filesize($newFullPath), $video->file_size);
 
         // No leftover temp/backup files.
@@ -179,7 +203,9 @@ BASH;
     {
         [, $video, $fullPath] = $this->makeDownloadedVideo('webm_source_vid', extension: 'webm');
 
-        $this->mockFfprobe('vp9');
+        // VP8 (unlike VP9/AV1) isn't flagged as "already efficient", so this exercises the real
+        // transcode + container-swap path rather than the early skip.
+        $this->mockFfprobe('vp8');
         $this->mockFfmpeg();
 
         CompressVideoJob::dispatchSync($video);
@@ -190,6 +216,68 @@ BASH;
         $this->assertStringEndsWith('.mkv', $video->file_path);
         $this->assertFileDoesNotExist($fullPath);
         $this->assertFileExists(Setting::getStoragePath().'/'.$video->file_path);
+    }
+
+    public function test_compress_video_job_keeps_the_original_when_the_hevc_reencode_is_not_smaller()
+    {
+        [, $video, $fullPath] = $this->makeDownloadedVideo('larger_after_compress_vid');
+        $originalContents = file_get_contents($fullPath);
+        $originalSize = $video->file_size;
+
+        // A borderline H.264 source (not on the "already efficient" list, so it still goes
+        // through a real transcode attempt) whose HEVC re-encode just happens to come out bigger
+        // this time — the result should be discarded and the original kept.
+        $this->mockFfprobe('h264');
+        $this->mockFfmpegWithLargerOutput();
+
+        CompressVideoJob::dispatchSync($video);
+
+        $video->refresh();
+        $this->assertSame('skipped', $video->compression_status);
+        $this->assertNotNull($video->compression_error);
+        $this->assertSame('h264', $video->video_codec);
+        $this->assertNotSame('hevc', $video->video_codec);
+        $this->assertSame($originalContents, file_get_contents($fullPath));
+        $this->assertSame($originalSize, $video->file_size);
+
+        // needsOptimization() should still offer the button again (this isn't HEVC and h264
+        // isn't an "already efficient" codec), and the status shouldn't be mistaken for "still
+        // running".
+        $this->assertFalse($video->isCompressing());
+        $this->assertTrue($video->needsOptimization());
+
+        // No leftover temp/backup files.
+        $this->assertFileDoesNotExist($fullPath.'.pre-compress.bak');
+    }
+
+    public function test_compress_video_job_skips_the_transcode_entirely_for_an_already_efficient_codec()
+    {
+        [, $video, $fullPath] = $this->makeDownloadedVideo('efficient_codec_vid');
+        $originalContents = file_get_contents($fullPath);
+
+        // Legacy-video fallback: video_codec wasn't known at queue time (predates download-time
+        // detection), so the job itself has to probe it — and, finding VP9, must skip the actual
+        // ffmpeg transcode entirely rather than run it just to prove it wouldn't shrink.
+        $this->mockFfprobe('vp9');
+        $sentinel = storage_path('app/temp/ffmpeg_was_invoked_'.uniqid());
+        file_put_contents(storage_path('app/temp/mock_ffmpeg_sentinel.sh'), <<<BASH
+#!/bin/bash
+touch {$sentinel}
+exit 1
+BASH);
+        chmod(storage_path('app/temp/mock_ffmpeg_sentinel.sh'), 0755);
+        config(['services.ffmpeg_path' => storage_path('app/temp/mock_ffmpeg_sentinel.sh')]);
+
+        CompressVideoJob::dispatchSync($video);
+
+        $this->assertFileDoesNotExist($sentinel, 'ffmpeg should never have been invoked for an already-efficient codec.');
+
+        $video->refresh();
+        $this->assertSame('skipped', $video->compression_status);
+        $this->assertNotNull($video->compression_error);
+        $this->assertSame('vp9', $video->video_codec);
+        $this->assertSame($originalContents, file_get_contents($fullPath));
+        $this->assertFalse($video->needsOptimization());
     }
 
     public function test_compress_video_job_marks_failure_and_leaves_original_untouched_when_ffmpeg_fails()
@@ -229,6 +317,17 @@ BASH;
         // Matches the opening tag specifically (class="video-optimize-btn) rather than the bare
         // class name, since the latter also appears as a CSS selector string inside the page's
         // always-present polling/click-handler JS (_video-modals.blade.php).
+        $response = $this->actingAs($user)->get('/videos/'.$video->id);
+        $response->assertDontSee('class="video-optimize-btn', false);
+    }
+
+    public function test_optimize_button_is_hidden_for_an_already_efficient_codec()
+    {
+        $user = User::factory()->create();
+        [, $video] = $this->makeDownloadedVideo('vp9_button_vid', ['video_codec' => 'vp9']);
+
+        $this->assertFalse($video->needsOptimization());
+
         $response = $this->actingAs($user)->get('/videos/'.$video->id);
         $response->assertDontSee('class="video-optimize-btn', false);
     }
@@ -273,6 +372,12 @@ BASH;
         [, $hevcVideo] = $this->makeDownloadedVideo('optimize_hevc_vid', ['video_codec' => 'hevc']);
         $response = $this->actingAs($user)->postJson('/videos/'.$hevcVideo->id.'/optimize');
         $response->assertStatus(422);
+
+        // Already an efficient codec (VP9/AV1): no action is offered either.
+        [, $vp9Video] = $this->makeDownloadedVideo('optimize_vp9_vid', ['video_codec' => 'vp9']);
+        $response = $this->actingAs($user)->postJson('/videos/'.$vp9Video->id.'/optimize');
+        $response->assertStatus(422);
+        Queue::assertNotPushed(CompressVideoJob::class, fn ($job) => $job->video->is($vp9Video));
     }
 
     public function test_compression_status_endpoint_reflects_the_videos_current_state()
@@ -289,6 +394,7 @@ BASH;
             'compression_status' => 'processing',
             'compression_progress_percent' => 42,
             'is_hevc' => false,
+            'needs_optimization' => true,
         ]);
     }
 

@@ -57,6 +57,18 @@ class FfmpegService
     }
 
     /**
+     * Whether $codec is already efficient enough that a CRF-based HEVC re-encode predictably
+     * produces a *larger* file rather than a smaller one — confirmed in practice with VP9/AV1
+     * sources, which are already comparable to or more efficient than libx265 at a quality-
+     * focused CRF. There's no reasonable expectation of a size win here, so callers should skip
+     * the (expensive) transcode attempt entirely rather than run it just to discover that.
+     */
+    public function isAlreadyEfficientCodec(?string $codec): bool
+    {
+        return in_array($codec, ['vp9', 'av1'], true);
+    }
+
+    /**
      * Transcode $inputPath's video stream to HEVC (H.265) into $outputPath, copying audio/
      * subtitle streams as-is (only the video codec changes).
      *
