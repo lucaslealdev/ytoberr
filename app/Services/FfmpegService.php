@@ -1,0 +1,84 @@
+<?php
+
+namespace App\Services;
+
+class FfmpegService
+{
+    /**
+     * How long an ffprobe codec check is allowed to run before being killed. It only reads a
+     * file's stream headers, not the whole file, so this only needs margin over a slow disk.
+     */
+    private const PROBE_TIMEOUT_SECONDS = 60;
+
+    /**
+     * Reuses YtDlpWrapper's process runner (Symfony Process wrapped with the process-group-kill
+     * timeout handling needed to reliably terminate ffmpeg/ffprobe, not anything yt-dlp specific)
+     * instead of duplicating that logic here.
+     */
+    public function __construct(private YtDlpWrapper $processRunner) {}
+
+    /**
+     * The video stream's codec name (e.g. "hevc", "h264", "vp9"), or null if it couldn't be
+     * determined (missing/corrupt file, no video stream, ffprobe failure).
+     */
+    public function detectVideoCodec(string $filePath): ?string
+    {
+        $ffprobe = config('services.ffprobe_path', base_path('bin/ffprobe'));
+
+        $command = "{$ffprobe} -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "
+            .escapeshellarg($filePath);
+
+        [$output, $resultCode] = $this->processRunner->runCommand($command, self::PROBE_TIMEOUT_SECONDS);
+
+        if ($resultCode !== 0 || empty($output)) {
+            return null;
+        }
+
+        return strtolower(trim($output[0]));
+    }
+
+    public function isHevcCodec(?string $codec): bool
+    {
+        return in_array($codec, ['hevc', 'h265'], true);
+    }
+
+    /**
+     * Transcode $inputPath's video stream to HEVC (H.265) into $outputPath, keeping the same
+     * container and copying audio/subtitle streams as-is (only the video codec changes).
+     *
+     * $onOutput, if given, receives ffmpeg's raw output as it's produced (Symfony's
+     * `function (string $type, string $buffer)` signature) — used to track encode progress via
+     * ffmpeg's `-progress pipe:1` lines without waiting for the whole encode to finish.
+     *
+     * @return array{0: bool, 1: string} [success, error output tail (empty on success)]
+     */
+    public function compressToHevc(string $inputPath, string $outputPath, int $timeoutSeconds, ?callable $onOutput = null): array
+    {
+        $ffmpeg = config('services.ffmpeg_path', base_path('bin/ffmpeg'));
+
+        $arguments = [
+            '-y',
+            '-i '.escapeshellarg($inputPath),
+            '-map 0',
+            '-c:v libx265',
+            '-crf 23',
+            '-preset medium',
+            '-tag:v hvc1',
+            '-c:a copy',
+            '-c:s copy',
+            '-progress pipe:1',
+            '-nostats',
+        ];
+
+        $argumentsString = implode(' ', $arguments);
+        $command = "{$ffmpeg} {$argumentsString} ".escapeshellarg($outputPath).' 2>&1';
+
+        [$output, $resultCode] = $this->processRunner->runCommand($command, $timeoutSeconds, $onOutput);
+
+        if ($resultCode !== 0) {
+            return [false, implode("\n", array_slice($output, -20))];
+        }
+
+        return [true, ''];
+    }
+}

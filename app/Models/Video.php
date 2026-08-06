@@ -14,6 +14,7 @@ class Video extends Model
         'channel_id', 'youtube_id', 'title', 'description', 'published_at', 'duration',
         'file_path', 'file_size', 'thumbnail_path', 'status', 'progress_percent', 'retries',
         'last_error', 'prevent_download', 'unavailable_reason', 'downloaded_at',
+        'video_codec', 'compression_status', 'compression_progress_percent', 'compression_error',
     ];
 
     protected static function booted()
@@ -233,6 +234,36 @@ class Video extends Model
         }
 
         return filesize($fullPath) ?: null;
+    }
+
+    /**
+     * Whether this video's file is known to already use the HEVC (H.265) codec, either because
+     * it was downloaded that way or a prior compression run confirmed/produced it. Null (never
+     * probed) is treated as "not confirmed HEVC" everywhere this is used.
+     */
+    public function isHevc(): bool
+    {
+        return $this->video_codec === 'hevc';
+    }
+
+    /**
+     * Whether a compression run (automatic or manually queued via the "Optimize" button) is
+     * currently in flight for this video.
+     */
+    public function isCompressing(): bool
+    {
+        return in_array($this->compression_status, ['queued', 'processing'], true);
+    }
+
+    /**
+     * Whether the "Optimize" action should be offered for this video: it's downloaded, its file
+     * still exists on disk, and it isn't already known to be HEVC. Videos downloaded before this
+     * feature existed have a null video_codec, so they're treated as needing optimization until
+     * a compression run confirms (or fixes) their codec.
+     */
+    public function needsOptimization(): bool
+    {
+        return $this->status === 'completed' && $this->videoUrl() !== null && ! $this->isHevc();
     }
 
     /**
