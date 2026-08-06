@@ -42,7 +42,7 @@ class VideoCompressionTest extends TestCase
      *
      * @return array{0: Channel, 1: Video, 2: string} [channel, video, full path to its file on disk]
      */
-    private function makeDownloadedVideo(string $youtubeId, array $overrides = []): array
+    private function makeDownloadedVideo(string $youtubeId, array $overrides = [], string $extension = 'mp4'): array
     {
         $channelName = "Compression Test Channel {$youtubeId}";
 
@@ -56,7 +56,7 @@ class VideoCompressionTest extends TestCase
         $videoDir = $downloadsDir.'/'.$channelName.'/Season 2026';
         mkdir($videoDir, 0755, true);
 
-        $relativeVideoPath = "{$channelName}/Season 2026/{$youtubeId}.mp4";
+        $relativeVideoPath = "{$channelName}/Season 2026/{$youtubeId}.{$extension}";
         $fullPath = $downloadsDir.'/'.$relativeVideoPath;
         file_put_contents($fullPath, 'original h264 video bytes');
 
@@ -146,14 +146,38 @@ BASH;
         CompressVideoJob::dispatchSync($video);
 
         $video->refresh();
+        $newFullPath = Setting::getStoragePath().'/'.$video->file_path;
+
         $this->assertSame('hevc', $video->video_codec);
         $this->assertSame('completed', $video->compression_status);
         $this->assertSame(100, $video->compression_progress_percent);
-        $this->assertSame('compressed hevc video bytes'."\n", file_get_contents($fullPath));
-        $this->assertSame(filesize($fullPath), $video->file_size);
+
+        // The source was .mp4, but the output always targets an .mkv container, so both the
+        // stored file_path and the file on disk move to the new extension.
+        $this->assertStringEndsWith('.mkv', $video->file_path);
+        $this->assertFileDoesNotExist($fullPath);
+        $this->assertSame('compressed hevc video bytes'."\n", file_get_contents($newFullPath));
+        $this->assertSame(filesize($newFullPath), $video->file_size);
 
         // No leftover temp/backup files.
         $this->assertFileDoesNotExist($fullPath.'.pre-compress.bak');
+    }
+
+    public function test_compress_video_job_moves_a_webm_source_to_mkv_since_webm_cannot_hold_hevc()
+    {
+        [, $video, $fullPath] = $this->makeDownloadedVideo('webm_source_vid', extension: 'webm');
+
+        $this->mockFfprobe('vp9');
+        $this->mockFfmpeg();
+
+        CompressVideoJob::dispatchSync($video);
+
+        $video->refresh();
+        $this->assertSame('completed', $video->compression_status);
+        $this->assertNull($video->compression_error);
+        $this->assertStringEndsWith('.mkv', $video->file_path);
+        $this->assertFileDoesNotExist($fullPath);
+        $this->assertFileExists(Setting::getStoragePath().'/'.$video->file_path);
     }
 
     public function test_compress_video_job_marks_failure_and_leaves_original_untouched_when_ffmpeg_fails()

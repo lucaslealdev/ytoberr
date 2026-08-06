@@ -59,8 +59,11 @@ class CompressVideoJob implements ShouldQueue
         $tempDir = storage_path('app/temp/'.Str::random(16));
         mkdir($tempDir, 0755, true);
 
-        $ext = pathinfo($fullPath, PATHINFO_EXTENSION);
-        $tempOutput = $tempDir.'/compressed.'.$ext;
+        // Always transcode into an MKV container rather than preserving the source's own
+        // extension: some source containers (WebM in particular, which only allows VP8/VP9/AV1
+        // video) reject an HEVC stream outright, and ffmpeg fails to even write the header. MKV
+        // reliably holds HEVC alongside whatever audio/subtitle codec got copied through as-is.
+        $tempOutput = $tempDir.'/compressed.mkv';
 
         [$success, $error] = $ffmpeg->compressToHevc(
             $fullPath,
@@ -80,7 +83,13 @@ class CompressVideoJob implements ShouldQueue
             return;
         }
 
-        if (! $this->swapInCompressedFile($fullPath, $tempOutput)) {
+        // If the source wasn't already .mkv, the video's stored path (and the file on disk)
+        // moves to a .mkv extension so the MIME type MediaController::show() derives from it
+        // (via response()->file(), extension-based) still matches the file's real container.
+        $newRelativePath = preg_replace('/\.[^.\/]+$/', '.mkv', $video->file_path);
+        $newFullPath = Setting::getStoragePath().'/'.$newRelativePath;
+
+        if (! $this->swapInCompressedFile($fullPath, $newFullPath, $tempOutput)) {
             $message = "Failed to swap in the compressed file for video {$video->youtube_id}; original left untouched.";
             Log::error($message);
             $video->update(['compression_status' => 'failed', 'compression_error' => $message]);
@@ -90,8 +99,9 @@ class CompressVideoJob implements ShouldQueue
         }
 
         $video->update([
+            'file_path' => $newRelativePath,
             'video_codec' => 'hevc',
-            'file_size' => filesize($fullPath) ?: null,
+            'file_size' => filesize($newFullPath) ?: null,
             'compression_status' => 'completed',
             'compression_progress_percent' => 100,
             'compression_error' => null,
@@ -104,25 +114,27 @@ class CompressVideoJob implements ShouldQueue
      * Replace the original file with the compressed one, in a way that never leaves the video
      * unplayable if something goes wrong partway through:
      *
-     * 1. Move the original aside (same filesystem as $fullPath, so this is a cheap rename).
-     * 2. Copy the compressed file into place ($tempOutput may be on a different filesystem/mount
-     *    than the configured storage path, so this has to be a copy, not a rename — mirrors
-     *    DownloadNextVideo's own copy() for the same reason).
+     * 1. Move the original aside (same filesystem as $originalPath, so this is a cheap rename).
+     * 2. Copy the compressed file into place at $newPath — which may differ from $originalPath
+     *    when the container's extension changed (see the .mkv note in handle()). This has to be
+     *    a copy, not a rename, because $tempOutput may be on a different filesystem/mount than
+     *    the configured storage path — mirrors DownloadNextVideo's own copy() for the same reason.
      * 3. Only once the copy has succeeded is the set-aside original actually deleted.
      *
-     * If the copy fails, the set-aside original is restored to $fullPath so the video is never
-     * left without a playable file at its expected location.
+     * If the copy fails, any partial file at $newPath is removed and the set-aside original is
+     * restored to $originalPath, so the video is never left without a playable file.
      */
-    private function swapInCompressedFile(string $fullPath, string $tempOutput): bool
+    private function swapInCompressedFile(string $originalPath, string $newPath, string $tempOutput): bool
     {
-        $backupPath = $fullPath.'.pre-compress.bak';
+        $backupPath = $originalPath.'.pre-compress.bak';
 
-        if (! @rename($fullPath, $backupPath)) {
+        if (! @rename($originalPath, $backupPath)) {
             return false;
         }
 
-        if (! @copy($tempOutput, $fullPath)) {
-            @rename($backupPath, $fullPath);
+        if (! @copy($tempOutput, $newPath)) {
+            @unlink($newPath);
+            @rename($backupPath, $originalPath);
 
             return false;
         }
