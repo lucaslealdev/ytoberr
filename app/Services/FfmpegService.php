@@ -43,8 +43,13 @@ class FfmpegService
     }
 
     /**
-     * Transcode $inputPath's video stream to HEVC (H.265) into $outputPath, keeping the same
-     * container and copying audio/subtitle streams as-is (only the video codec changes).
+     * Transcode $inputPath's video stream to HEVC (H.265) into $outputPath, copying audio/
+     * subtitle streams as-is (only the video codec changes).
+     *
+     * $outputPath must use a container that can actually hold an HEVC stream (e.g. .mkv) —
+     * callers must not simply reuse the input's own extension/container, since some source
+     * containers (e.g. WebM, which only allows VP8/VP9/AV1 video) reject HEVC outright and
+     * ffmpeg fails to even write the header.
      *
      * $onOutput, if given, receives ffmpeg's raw output as it's produced (Symfony's
      * `function (string $type, string $buffer)` signature) — used to track encode progress via
@@ -63,7 +68,6 @@ class FfmpegService
             '-c:v libx265',
             '-crf 23',
             '-preset medium',
-            '-tag:v hvc1',
             '-c:a copy',
             '-c:s copy',
             '-progress pipe:1',
