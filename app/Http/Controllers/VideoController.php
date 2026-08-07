@@ -189,6 +189,7 @@ class VideoController extends Controller
             'compression_status' => $video->compression_status,
             'compression_progress_percent' => $video->compression_progress_percent,
             'is_hevc' => $video->isHevc(),
+            'needs_optimization' => $video->needsOptimization(),
         ]);
     }
 

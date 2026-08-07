@@ -11,8 +11,9 @@ class VideoCompressionService
      * Queue a downloaded video for background HEVC compression, either automatically right
      * after a successful download (when Setting::compressionEnabled() is on) or from the
      * manual "Optimize" button (available regardless of that setting). Silently no-ops for
-     * anything not eligible (not yet downloaded, already HEVC, or a compression run already in
-     * flight) so both callers can invoke this without duplicating the eligibility checks.
+     * anything not eligible (not yet downloaded, already HEVC, a compression run already in
+     * flight, or a codec already too efficient to realistically shrink) so both callers can
+     * invoke this without duplicating the eligibility checks.
      */
     public function queue(Video $video): bool
     {
@@ -20,7 +21,7 @@ class VideoCompressionService
             return false;
         }
 
-        if ($video->isHevc() || $video->isCompressing()) {
+        if ($video->isHevc() || $video->isCompressing() || $video->hasAlreadyEfficientCodec()) {
             return false;
         }
 
