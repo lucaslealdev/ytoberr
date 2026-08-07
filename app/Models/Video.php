@@ -14,7 +14,7 @@ class Video extends Model
         'channel_id', 'youtube_id', 'title', 'description', 'published_at', 'duration',
         'file_path', 'file_size', 'thumbnail_path', 'status', 'progress_percent', 'retries',
         'last_error', 'prevent_download', 'unavailable_reason', 'downloaded_at',
-        'video_codec', 'compression_status', 'compression_progress_percent', 'compression_error',
+        'video_codec', 'audio_codec', 'compression_status', 'compression_progress_percent', 'compression_error',
     ];
 
     protected static function booted()
