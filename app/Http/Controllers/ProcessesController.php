@@ -54,10 +54,18 @@ class ProcessesController extends Controller
     }
 
     /**
-     * Signal a stuck/unwanted in-progress download to stop. The actual kill happens here
-     * (posix_kill on the process group started in YtDlpWrapper::runCommand); the download
-     * command itself only notices via cancel_requested_at once its blocking wait() call
-     * returns, and finishes recording the outcome from there (see DownloadNextVideo::processVideo).
+     * Signal a stuck/unwanted in-progress download to stop, and record the cancellation on the
+     * video row directly instead of just flagging it and waiting for DownloadNextVideo to notice.
+     *
+     * The original approach only set cancel_requested_at and relied on the still-running
+     * `videos:download` process to observe it once its blocking wait() call returned (see
+     * DownloadNextVideo::processVideo). That leaves the video stuck showing as "downloading"
+     * forever whenever that process isn't actually there to notice anymore — e.g. it already
+     * crashed, or the whole server was restarted — since nothing else ever moves the row out of
+     * "downloading". Updating the status here makes Cancel take effect immediately and
+     * unconditionally. The posix_kill is still attempted best-effort in case a real process is
+     * alive; if DownloadNextVideo *is* still running and later reaches its own post-kill handling,
+     * cancel_requested_at being set makes that a harmless no-op over the same fields.
      */
     public function cancelDownload(Video $video)
     {
@@ -70,9 +78,15 @@ class ProcessesController extends Controller
             @posix_kill(-$video->download_pid, SIGKILL);
         }
 
-        $video->update(['cancel_requested_at' => now()]);
+        $video->update([
+            'status' => 'failed',
+            'progress_percent' => null,
+            'download_pid' => null,
+            'cancel_requested_at' => now(),
+            'last_error' => 'Cancelled by user.',
+        ]);
 
-        return back()->with('status', 'Cancel requested — the download will stop shortly.');
+        return back()->with('status', 'Download cancelled.');
     }
 
     public function destroyVideo(Video $video)

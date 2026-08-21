@@ -702,6 +702,42 @@ BASH);
         $this->assertEquals(0, $video->retries);
     }
 
+    public function test_downloader_recovers_a_video_orphaned_by_a_dead_previous_process()
+    {
+        // Regression test: routes/console.php's withoutOverlapping() guarantees this invocation
+        // only starts when no other one is still running, so a video already sitting in
+        // "downloading" when handle() begins must be left over from a previous process that died
+        // without finishing it (crashed, or the server was restarted) — there's no live process
+        // left to ever notice it. Without this recovery it would stay stuck showing as
+        // "downloading" in the Processes page's Live Activity forever, even across a restart.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_orphan_chan',
+            'name' => 'Orphan Channel',
+            'url' => 'https://example.com/orphan',
+        ]);
+
+        $orphan = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'orphaned_downloading_vid',
+            'title' => 'Orphaned Video',
+            'published_at' => now(),
+            'status' => 'downloading',
+            'progress_percent' => 55,
+            'download_pid' => 12345,
+            'retries' => 0,
+        ]);
+
+        Artisan::call('videos:download');
+
+        $orphan->refresh();
+        $this->assertEquals('failed', $orphan->status);
+        $this->assertEquals(1, $orphan->retries);
+        $this->assertNull($orphan->progress_percent);
+        $this->assertNull($orphan->download_pid);
+        $this->assertNull($orphan->cancel_requested_at);
+        $this->assertEquals('Download interrupted (process was no longer running).', $orphan->last_error);
+    }
+
     public function test_downloader_sleeps_between_videos_but_not_before_the_first_or_after_the_last()
     {
         // --sleep-requests/--sleep-interval only throttle requests *within* a single yt-dlp
