@@ -180,7 +180,17 @@ class ProcessesTest extends TestCase
         $response = $this->actingAs($user)->post(route('processes.videos.cancel', $video));
 
         $response->assertRedirect();
-        $this->assertNotNull($video->fresh()->cancel_requested_at);
+
+        // The status is flipped to "failed" immediately by the controller itself, not left
+        // pending on DownloadNextVideo noticing cancel_requested_at later — otherwise a video
+        // whose downloader process already died (crashed, or the server was restarted) would
+        // stay stuck showing as "downloading" forever with no way to notice the cancellation.
+        $fresh = $video->fresh();
+        $this->assertEquals('failed', $fresh->status);
+        $this->assertEquals('Cancelled by user.', $fresh->last_error);
+        $this->assertNull($fresh->progress_percent);
+        $this->assertNull($fresh->download_pid);
+        $this->assertNotNull($fresh->cancel_requested_at);
     }
 
     public function test_cannot_cancel_a_video_that_is_not_downloading()

@@ -46,6 +46,8 @@ class DownloadNextVideo extends Command
     {
         $this->info('Starting download queue processor...');
 
+        $this->recoverOrphanedDownloads();
+
         $startedAt = now();
         $processedCount = 0;
 
@@ -89,6 +91,39 @@ class DownloadNextVideo extends Command
         }
 
         return 0;
+    }
+
+    /**
+     * Fail any video still marked "downloading" from a previous invocation that never got the
+     * chance to finish it (e.g. the process was OOM-killed, or the whole server was restarted).
+     * routes/console.php's withoutOverlapping() guarantees this invocation could only start if
+     * no other one was still running — so any row already sitting in "downloading" at this point
+     * has no live process left that will ever notice it and move it on, and would otherwise sit
+     * stuck in the Processes page's Live Activity forever. Also catches a video whose Cancel
+     * request (ProcessesController::cancelDownload) didn't actually manage to update the row for
+     * some reason, as a second line of defense.
+     *
+     * Marked "failed" rather than requeued straight back to "pending": requeuing would have this
+     * same handle() invocation immediately re-attempt it in the loop below, which — if whatever
+     * killed the previous process (e.g. a video that reliably crashes the whole worker) is still
+     * a problem — could repeat indefinitely within a single run. Failing it instead surfaces it
+     * on the Processes page, where it can be retried explicitly once the underlying issue (if any
+     * beyond an unclean shutdown) is understood.
+     */
+    private function recoverOrphanedDownloads(): void
+    {
+        Video::where('status', 'downloading')->get()->each(function (Video $video) {
+            Log::warning("Video {$video->youtube_id} was stuck in 'downloading' with no live process; marking failed.");
+
+            $video->update([
+                'status' => 'failed',
+                'progress_percent' => null,
+                'download_pid' => null,
+                'cancel_requested_at' => null,
+                'retries' => $video->retries + 1,
+                'last_error' => 'Download interrupted (process was no longer running).',
+            ]);
+        });
     }
 
     /**
