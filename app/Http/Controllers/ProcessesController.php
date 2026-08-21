@@ -53,6 +53,28 @@ class ProcessesController extends Controller
         ));
     }
 
+    /**
+     * Signal a stuck/unwanted in-progress download to stop. The actual kill happens here
+     * (posix_kill on the process group started in YtDlpWrapper::runCommand); the download
+     * command itself only notices via cancel_requested_at once its blocking wait() call
+     * returns, and finishes recording the outcome from there (see DownloadNextVideo::processVideo).
+     */
+    public function cancelDownload(Video $video)
+    {
+        abort_unless($video->status === 'downloading', 422, 'Only a video that is currently downloading can be cancelled.');
+
+        if ($video->download_pid) {
+            // Negative PID targets the whole process group, not just the tracked PID itself —
+            // see the posix_setpgid() call in YtDlpWrapper::runCommand for why that matters
+            // (yt-dlp can spawn ffmpeg as a child to merge formats).
+            @posix_kill(-$video->download_pid, SIGKILL);
+        }
+
+        $video->update(['cancel_requested_at' => now()]);
+
+        return back()->with('status', 'Cancel requested — the download will stop shortly.');
+    }
+
     public function destroyVideo(Video $video)
     {
         abort_unless(in_array($video->status, ['pending', 'failed']), 422, 'Only pending or failed videos can be removed here.');

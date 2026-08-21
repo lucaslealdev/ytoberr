@@ -12,7 +12,8 @@ class Video extends Model
 {
     protected $fillable = [
         'channel_id', 'youtube_id', 'title', 'description', 'published_at', 'duration',
-        'file_path', 'file_size', 'thumbnail_path', 'status', 'progress_percent', 'retries',
+        'file_path', 'file_size', 'thumbnail_path', 'status', 'progress_percent', 'download_pid',
+        'cancel_requested_at', 'retries',
         'last_error', 'prevent_download', 'unavailable_reason', 'downloaded_at',
         'video_codec', 'audio_codec', 'compression_status', 'compression_progress_percent', 'compression_error',
     ];
