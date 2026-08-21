@@ -30,9 +30,14 @@ class YtDlpWrapper
      * observe yt-dlp's progress in real time without waiting for the whole process to finish.
      * It's purely an observer: the full output is still buffered and returned as normal.
      *
+     * $onStart, if given, is invoked once with the process group ID right after the process
+     * starts — used by the download command to persist it so a "Cancel" button elsewhere in the
+     * app can signal this same process (via posix_kill(-$pid, ...), same as the timeout kill
+     * below) without waiting for it to time out on its own.
+     *
      * @return array{0: array<int, string>, 1: int} [output lines, exit code]
      */
-    public function runCommand(string $command, int $timeoutSeconds, ?callable $onOutput = null): array
+    public function runCommand(string $command, int $timeoutSeconds, ?callable $onOutput = null, ?callable $onStart = null): array
     {
         // The leading "exec" makes the shell replace itself with the command instead of
         // forking a child for it (Symfony only adds this automatically for array-form
@@ -49,6 +54,10 @@ class YtDlpWrapper
         // a child that process forks doesn't die with it and is left running as an orphan.
         if ($pid = $process->getPid()) {
             posix_setpgid($pid, $pid);
+        }
+
+        if ($onStart) {
+            $onStart($pid);
         }
 
         try {

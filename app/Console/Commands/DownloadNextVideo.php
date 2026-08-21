@@ -101,8 +101,15 @@ class DownloadNextVideo extends Command
     {
         $this->info("Processing video: {$video->title} (ID: {$video->youtube_id})");
 
-        // 2. Mark as downloading
-        $video->update(['status' => 'downloading', 'progress_percent' => 0]);
+        // 2. Mark as downloading. download_pid/cancel_requested_at are cleared defensively here
+        // too (not just after the process below completes) in case a previous run was killed
+        // before it got the chance to clear them itself (e.g. the whole server going down).
+        $video->update([
+            'status' => 'downloading',
+            'progress_percent' => 0,
+            'download_pid' => null,
+            'cancel_requested_at' => null,
+        ]);
 
         // 3. Create temp directory
         $tempDir = storage_path('app/temp/'.Str::random(16));
@@ -164,9 +171,43 @@ class DownloadNextVideo extends Command
         // 30 minutes: generous enough for a large video over a slow connection, while still
         // guaranteeing a hung download gets killed outright instead of blocking this command
         // (and the every-2-minutes schedule behind it, via withoutOverlapping()) forever.
-        [$output, $resultCode] = $ytDlpWrapper->runCommand($command, 1800, $this->progressWriter($video));
+        [$output, $resultCode] = $ytDlpWrapper->runCommand(
+            $command,
+            1800,
+            $this->progressWriter($video),
+            fn (?int $pid) => $video->update(['download_pid' => $pid]),
+        );
 
         $rawOutput = implode("\n", $output);
+
+        // A manual cancel (Processes page "Live Activity" -> Cancel) sets cancel_requested_at
+        // from a separate request while this command is blocked above, so $video's in-memory
+        // attributes here are stale — refresh() picks that write up. It also re-syncs Eloquent's
+        // "original" snapshot, which the update() just below depends on: without it, clearing
+        // cancel_requested_at back to null would look like a no-op (null-to-null, as far as this
+        // object knew) and Eloquent would silently skip writing that column.
+        $video->refresh();
+
+        // Read this before the update() below clears it, and before any of the branches further
+        // down get a chance to overwrite $video's status — a manual cancel lands here
+        // indistinguishable from any other non-zero exit unless we check the flag it set first.
+        $wasCancelled = ! is_null($video->cancel_requested_at);
+
+        $video->update(['download_pid' => null, 'cancel_requested_at' => null]);
+
+        if ($wasCancelled) {
+            $this->info("Download cancelled by user for video: {$video->title}");
+
+            $video->update([
+                'status' => 'failed',
+                'progress_percent' => null,
+                'last_error' => 'Cancelled by user.',
+            ]);
+
+            $this->cleanup($tempDir);
+
+            return;
+        }
 
         if ($resultCode === 0) {
             // Success! Move the downloaded files into place as-is (no transcoding/remuxing).

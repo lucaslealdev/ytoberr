@@ -15,11 +15,17 @@
         @else
             <div class="space-y-2 text-sm">
                 @if ($downloadingVideo)
-                    <p class="text-blue-400">
-                        ⬇️ Downloading: <span class="text-white font-semibold">{{ $downloadingVideo->title }}</span> <span class="text-gray-500">({{ $downloadingVideo->channel->name ?? 'Unknown' }})</span>
-                        @if (! is_null($downloadingVideo->progress_percent))
-                            <span class="text-gray-400">&mdash; {{ $downloadingVideo->progress_percent }}%</span>
-                        @endif
+                    <p class="text-blue-400 flex items-center justify-between gap-4">
+                        <span>
+                            ⬇️ Downloading: <span class="text-white font-semibold">{{ $downloadingVideo->title }}</span> <span class="text-gray-500">({{ $downloadingVideo->channel->name ?? 'Unknown' }})</span>
+                            @if (! is_null($downloadingVideo->progress_percent))
+                                <span class="text-gray-400">&mdash; {{ $downloadingVideo->progress_percent }}%</span>
+                            @endif
+                        </span>
+                        <form action="{{ route('processes.videos.cancel', $downloadingVideo) }}" method="POST" onsubmit="return confirm('Cancel this download? It will be marked as failed and can be retried later.');" class="flex-shrink-0">
+                            @csrf
+                            <button type="submit" class="text-red-400 hover:text-red-300 text-xs">Cancel</button>
+                        </form>
                     </p>
                     @if (! is_null($downloadingVideo->progress_percent))
                         <div class="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden max-w-md">

@@ -158,6 +158,71 @@ class ProcessesTest extends TestCase
         $response->assertSee('Running');
     }
 
+    public function test_can_request_cancellation_of_the_currently_downloading_video()
+    {
+        Setting::set('advanced_mode', '1');
+        $user = User::factory()->create();
+
+        $channel = Channel::create(['youtube_id' => 'UC_cancel_download', 'name' => 'X', 'url' => 'https://example.com/cancel-download']);
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'cancel_download_vid',
+            'title' => 'Cancel Download Video',
+            'published_at' => now(),
+            'status' => 'downloading',
+            'progress_percent' => 42,
+            // Not a real running process — posix_kill on it is expected to just harmlessly
+            // fail (suppressed with @ in the controller), same as it would if the real yt-dlp
+            // process had already exited a moment before the click landed.
+            'download_pid' => 999999,
+        ]);
+
+        $response = $this->actingAs($user)->post(route('processes.videos.cancel', $video));
+
+        $response->assertRedirect();
+        $this->assertNotNull($video->fresh()->cancel_requested_at);
+    }
+
+    public function test_cannot_cancel_a_video_that_is_not_downloading()
+    {
+        Setting::set('advanced_mode', '1');
+        $user = User::factory()->create();
+
+        $channel = Channel::create(['youtube_id' => 'UC_cancel_not_downloading', 'name' => 'X', 'url' => 'https://example.com/cancel-not-downloading']);
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'cancel_pending_vid',
+            'title' => 'Pending Video',
+            'published_at' => now(),
+            'status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($user)->post(route('processes.videos.cancel', $video));
+
+        $response->assertStatus(422);
+        $this->assertNull($video->fresh()->cancel_requested_at);
+    }
+
+    public function test_the_live_activity_downloading_video_shows_a_cancel_button()
+    {
+        Setting::set('advanced_mode', '1');
+        $user = User::factory()->create();
+
+        $channel = Channel::create(['youtube_id' => 'UC_cancel_button_shown', 'name' => 'X', 'url' => 'https://example.com/cancel-button-shown']);
+        Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'cancel_button_shown_vid',
+            'title' => 'Downloading Video',
+            'published_at' => now(),
+            'status' => 'downloading',
+        ]);
+
+        $response = $this->actingAs($user)->get('/processes');
+
+        $response->assertStatus(200);
+        $response->assertSee('Cancel');
+    }
+
     public function test_can_remove_a_pending_video_from_the_processes_page()
     {
         Setting::set('advanced_mode', '1');

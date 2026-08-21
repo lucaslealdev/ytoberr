@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Channel;
 use App\Models\Setting;
 use App\Models\Video;
+use App\Services\YtDlpWrapper;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
@@ -642,6 +643,63 @@ BASH);
         $this->assertEquals(93, $video->fresh()->progress_percent);
 
         unlink($mockYtDlp);
+    }
+
+    public function test_downloader_records_a_user_cancellation_without_counting_it_as_a_retry()
+    {
+        // Regression test for the Processes page "Live Activity" Cancel button: when the
+        // process a user cancelled dies (killed by ProcessesController::cancelDownload, which
+        // sets cancel_requested_at and posix_kills the process group persisted as download_pid
+        // by YtDlpWrapper's $onStart hook), DownloadNextVideo must record it distinctly from a
+        // real failure — no retry increment, a clear "Cancelled by user." message — rather than
+        // falling into the generic retry/failure path a killed process would otherwise hit.
+        //
+        // The kill happens from a separate request while this command is blocked inside yt-dlp,
+        // so it can't be reproduced with the real subprocess + in-memory sqlite this suite
+        // otherwise uses (a second process can't see this process's in-memory database). Instead
+        // YtDlpWrapper is faked here to simulate the cancel arriving mid-download: it captures
+        // the pid via $onStart exactly like the real implementation would, marks the video
+        // cancelled (standing in for the controller's own posix_kill + update), then returns a
+        // killed-process-style non-zero exit code.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_cancel_chan',
+            'name' => 'Cancel Channel',
+            'url' => 'https://example.com/cancel',
+        ]);
+
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'cancel_mid_download_vid',
+            'title' => 'Cancel Mid Download Video',
+            'published_at' => now(),
+            'status' => 'pending',
+        ]);
+
+        $this->mock(YtDlpWrapper::class, function ($mock) use ($video) {
+            $mock->shouldReceive('runCommand')
+                ->once()
+                ->andReturnUsing(function (string $command, int $timeoutSeconds, ?callable $onOutput = null, ?callable $onStart = null) use ($video) {
+                    if ($onStart) {
+                        $onStart(4242);
+                    }
+
+                    $this->assertEquals(4242, $video->fresh()->download_pid);
+
+                    $video->fresh()->update(['cancel_requested_at' => now()]);
+
+                    return [['ERROR: killed by signal'], 137];
+                });
+        });
+
+        Artisan::call('videos:download');
+
+        $video->refresh();
+        $this->assertEquals('failed', $video->status);
+        $this->assertEquals('Cancelled by user.', $video->last_error);
+        $this->assertNull($video->progress_percent);
+        $this->assertNull($video->download_pid);
+        $this->assertNull($video->cancel_requested_at);
+        $this->assertEquals(0, $video->retries);
     }
 
     public function test_downloader_sleeps_between_videos_but_not_before_the_first_or_after_the_last()
