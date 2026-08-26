@@ -273,6 +273,52 @@ BASH);
         unlink($mockYtDlp);
     }
 
+    public function test_downloader_logs_a_warning_when_the_js_challenge_solver_crashes()
+    {
+        // Regression test: yt-dlp's bundled Node runtime getting killed (typically the
+        // container's OOM killer) while solving YouTube's throttling challenge is an
+        // environment-level problem, not a per-video one — it must be surfaced as a distinct
+        // Warning right away rather than silently blending into a generic retry.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_test_chan',
+            'name' => 'Space Channel',
+            'url' => 'https://example.com/space',
+        ]);
+
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'not_due_vid',
+            'title' => 'Throttled Video',
+            'published_at' => '2026-07-10 12:00:00',
+            'status' => 'pending',
+        ]);
+
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_js_crash.sh');
+        file_put_contents($mockYtDlp, <<<'BASH'
+#!/bin/bash
+echo "WARNING: [youtube] [jsc] Error solving n challenge request using \"node\" provider: Error running node process (returncode: -9)"
+echo "WARNING: [youtube] not_due_vid: n challenge solving failed: Some formats may be missing."
+echo "WARNING: Only images are available for download. use --list-formats to see them"
+echo "ERROR: [youtube] not_due_vid: Requested format is not available. Use --list-formats for a list of available formats"
+exit 1
+BASH);
+        chmod($mockYtDlp, 0755);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('videos:download');
+
+        $video->refresh();
+        // With no other pending video and no delay configured, the queue-draining loop in
+        // handle() immediately re-picks this same video each time it's requeued, so a single
+        // invocation exhausts all 3 retries and leaves it permanently failed — same behavior as
+        // test_downloader_logs_a_warning_when_a_video_permanently_fails_after_max_retries below.
+        $this->assertEquals('failed', $video->status);
+        $this->assertEquals(3, $video->retries);
+        $this->assertDatabaseHas('warnings', ['source' => 'js_challenge_solver_failure', 'video_id' => $video->id]);
+
+        unlink($mockYtDlp);
+    }
+
     public function test_downloader_suspends_queue_on_three_consecutive_failures()
     {
         $channel = Channel::create([

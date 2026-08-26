@@ -113,6 +113,23 @@ class Video extends Model
     }
 
     /**
+     * Whether yt-dlp's error output shows its JS-challenge runtime (node or deno, used to solve
+     * YouTube's "n" throttling parameter) failed to run at all, as opposed to YouTube itself
+     * rejecting the request. `returncode: -9` specifically is SIGKILL — the runtime was killed
+     * by something external (most commonly the OOM killer under container memory pressure)
+     * rather than crashing on its own — so this is a distinct, environment-level signal worth
+     * flagging separately from a normal per-video extraction failure.
+     */
+    public static function isJsChallengeSolverFailure(string $errorOutput): bool
+    {
+        return Str::contains(strtolower($errorOutput), [
+            'error running node process',
+            'error running deno process',
+            'n challenge solving failed',
+        ]);
+    }
+
+    /**
      * URL for the locally-saved thumbnail, or null if it isn't set or the file is missing on disk.
      */
     public function thumbnailUrl(): ?string

@@ -141,6 +141,8 @@ For a self-hosted/small-household install this is usually plenty, but if you exp
 - Raising `PHP_CLI_SERVER_WORKERS` further (each worker adds some memory overhead).
 - Fronting the container with a real reverse proxy (nginx, Caddy, Traefik, etc.), which can serve large files far more efficiently than tying up a PHP worker for the whole transfer.
 
+If downloads fail with `Error running node process (returncode: -9)` (yt-dlp falls back to image-only formats and errors out), the container's memory limit is too low — that's yt-dlp's bundled Node runtime, used to solve YouTube's throttling challenge, being OOM-killed. Raise `YTOBERR_MEM_LIMIT` in `.env` (default `2g`) and restart the container.
+
 ## 🙏 Credits
 
 This project only exists by standing on the shoulders of giants:

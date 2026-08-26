@@ -403,9 +403,21 @@ class DownloadNextVideo extends Command
             return;
         }
 
+        // 2. Flag a crashed/killed JS-challenge runtime (node/deno) separately and immediately —
+        // it's an environment-level problem (most often the container running out of memory),
+        // not something specific to this video, so it's worth surfacing with the full yt-dlp
+        // output right away instead of waiting for the queue-suspension threshold below to
+        // trip. Still falls through to the standard retry handling further down since it's
+        // transient rather than a permanent per-video failure.
+        if (Video::isJsChallengeSolverFailure($errorOutput)) {
+            $message = "Video {$video->youtube_id} failed: yt-dlp's JS-challenge runtime (node/deno) crashed or was killed while solving YouTube's throttling parameter — this is commonly caused by the container running out of memory. If this keeps happening, try raising the app container's memory limit (YTOBERR_MEM_LIMIT in .env).";
+            Log::error($message."\n".$errorOutput);
+            Warning::log('js_challenge_solver_failure', $message, $errorOutput, $video->id);
+        }
+
         $errorOutputLower = strtolower($errorOutput);
 
-        // 2. Check for Cookie/Authentication issues
+        // 3. Check for Cookie/Authentication issues
         $needsCookies = Str::contains($errorOutputLower, [
             'sign in to confirm',
             'confirm your age',
@@ -437,7 +449,7 @@ class DownloadNextVideo extends Command
             return;
         }
 
-        // 3. Handle Standard Retries
+        // 4. Handle Standard Retries
         if ($retries >= 3) {
             $video->update([
                 'status' => 'failed',
@@ -453,7 +465,7 @@ class DownloadNextVideo extends Command
                 'retries' => $retries,
                 'last_error' => 'Temporary download error. Retrying later.',
             ]);
-            Log::warning("Video {$video->youtube_id} failed. Attempt {$retries}/3. Returned to queue.");
+            Log::warning("Video {$video->youtube_id} failed. Attempt {$retries}/3. Returned to queue.\n{$errorOutput}");
         }
 
         $this->incrementConsecutiveFailures($errorOutput);
