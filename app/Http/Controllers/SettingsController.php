@@ -8,6 +8,7 @@ use App\Models\Video;
 use App\Models\Warning;
 use App\Models\YtDlpCache;
 use App\Services\BackupService;
+use App\Services\BannedVideoCheckService;
 use App\Services\UpdateChecker;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -15,7 +16,7 @@ use Illuminate\Support\Facades\Hash;
 
 class SettingsController extends Controller
 {
-    public function index(UpdateChecker $updateChecker, BackupService $backups)
+    public function index(UpdateChecker $updateChecker, BackupService $backups, BannedVideoCheckService $bannedVideoCheck)
     {
         $storagePath = Setting::getStoragePath();
         $cacheCount = YtDlpCache::count();
@@ -29,6 +30,8 @@ class SettingsController extends Controller
         $compressionEnabled = Setting::compressionEnabled();
         $warnings = Warning::with('video')->latest()->get();
         $backupsList = $backups->list();
+        $bannedVideosCheckProgress = $bannedVideoCheck->progress();
+        $bannedVideosCount = Video::where('is_banned', true)->count();
 
         $cookiesPath = storage_path('app/cookies.txt');
         $cookiesConfigured = file_exists($cookiesPath);
@@ -37,7 +40,7 @@ class SettingsController extends Controller
         return view('settings.index', compact(
             'storagePath', 'cacheCount', 'latestVersion', 'updateAvailable',
             'ytdlpDelaySeconds', 'advancedModeEnabled', 'lightModeEnabled', 'compressionEnabled', 'warnings', 'backupsList',
-            'cookiesConfigured', 'cookiesUpdatedAt'
+            'cookiesConfigured', 'cookiesUpdatedAt', 'bannedVideosCheckProgress', 'bannedVideosCount'
         ));
     }
 
@@ -238,6 +241,30 @@ class SettingsController extends Controller
         }
 
         return back()->with('status', "Removed {$deletedCount} missing video records from the database!");
+    }
+
+    public function startBannedVideosCheck(BannedVideoCheckService $bannedVideoCheck)
+    {
+        if ($bannedVideoCheck->isRunning()) {
+            return back()->with('status', 'A banned-videos check is already running.');
+        }
+
+        $bannedVideoCheck->start();
+
+        if ($bannedVideoCheck->progress()['total'] === 0) {
+            $bannedVideoCheck->cancel();
+
+            return back()->with('status', 'Nothing to check — every video was already checked within the last week.');
+        }
+
+        return back()->with('status', 'Banned-videos check started. It runs in the background, checking 60 videos per minute — refresh this page to see progress.');
+    }
+
+    public function cancelBannedVideosCheck(BannedVideoCheckService $bannedVideoCheck)
+    {
+        $bannedVideoCheck->cancel();
+
+        return back()->with('status', 'Banned-videos check cancelled.');
     }
 
     public function resetCache()

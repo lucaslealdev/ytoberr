@@ -51,6 +51,8 @@ Route::middleware('auth')->group(function () {
     Route::delete('/settings/cookies', [SettingsController::class, 'deleteCookies'])->name('settings.cookies.delete');
     Route::get('/settings/check-missing-videos', [SettingsController::class, 'checkMissingVideos']);
     Route::post('/settings/clean-missing-videos', [SettingsController::class, 'cleanMissingVideos']);
+    Route::post('/settings/banned-videos/start', [SettingsController::class, 'startBannedVideosCheck'])->name('settings.banned-videos.start');
+    Route::post('/settings/banned-videos/cancel', [SettingsController::class, 'cancelBannedVideosCheck'])->name('settings.banned-videos.cancel');
     Route::post('/settings/reset-cache', [SettingsController::class, 'resetCache']);
     Route::delete('/settings/warnings/{warning}', [SettingsController::class, 'deleteWarning'])->name('settings.warnings.delete');
     Route::delete('/settings/warnings', [SettingsController::class, 'clearWarnings'])->name('settings.warnings.clear-all');

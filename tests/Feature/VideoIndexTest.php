@@ -205,4 +205,70 @@ class VideoIndexTest extends TestCase
         $content = $response->getContent();
         $this->assertTrue(strpos($content, 'Apple video') < strpos($content, 'Banana video'));
     }
+
+    public function test_banned_filter_shows_only_banned_videos()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_banned_filter_chan',
+            'name' => 'Banned Filter Channel',
+            'url' => 'https://example.com/banned-filter',
+        ]);
+
+        Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'not_banned_vid',
+            'title' => 'Still Available Video',
+            'published_at' => now(),
+            'status' => 'completed',
+        ]);
+
+        Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'is_banned_vid',
+            'title' => 'Removed Video',
+            'published_at' => now(),
+            'status' => 'completed',
+            'is_banned' => true,
+        ]);
+
+        $response = $this->actingAs($user)->get('/videos?banned=1');
+
+        $response->assertStatus(200);
+        $response->assertSee('Removed Video');
+        $response->assertDontSee('Still Available Video');
+    }
+
+    public function test_banned_filter_is_off_by_default()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_banned_default_chan',
+            'name' => 'Banned Default Channel',
+            'url' => 'https://example.com/banned-default',
+        ]);
+
+        Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'default_banned_vid',
+            'title' => 'Removed Video',
+            'published_at' => now(),
+            'status' => 'completed',
+            'is_banned' => true,
+        ]);
+
+        Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'default_ok_vid',
+            'title' => 'Still Available Video',
+            'published_at' => now(),
+            'status' => 'completed',
+        ]);
+
+        $response = $this->actingAs($user)->get('/videos');
+
+        $response->assertStatus(200);
+        $response->assertSee('Removed Video');
+        $response->assertSee('Still Available Video');
+    }
 }

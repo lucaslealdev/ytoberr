@@ -14,7 +14,7 @@ class Video extends Model
         'channel_id', 'youtube_id', 'title', 'description', 'published_at', 'duration',
         'file_path', 'file_size', 'thumbnail_path', 'status', 'progress_percent', 'download_pid',
         'cancel_requested_at', 'retries',
-        'last_error', 'prevent_download', 'unavailable_reason', 'downloaded_at',
+        'last_error', 'prevent_download', 'unavailable_reason', 'is_banned', 'banned_checked_at', 'downloaded_at',
         'video_codec', 'audio_codec', 'compression_status', 'compression_progress_percent', 'compression_error',
     ];
 

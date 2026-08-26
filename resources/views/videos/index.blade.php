@@ -58,9 +58,13 @@
             @endif
         </div>
 
-        <div class="flex gap-2 items-center text-sm">
+        <div class="flex gap-4 items-center text-sm">
+            <label class="flex items-center gap-2 text-gray-400 cursor-pointer">
+                <input type="checkbox" onchange="window.location.href='?search={{ urlencode($search) }}&amp;sort={{ urlencode($sort) }}&amp;banned='+(this.checked ? '1' : '0')" {{ $bannedOnly ? 'checked' : '' }} class="rounded bg-gray-800 border-gray-700">
+                Banned only
+            </label>
             <span class="text-gray-400">Order by:</span>
-            <select onchange="window.location.href='?search={{ urlencode($search) }}&amp;sort='+this.value" class="bg-gray-800 text-gray-100 p-2 rounded border border-gray-700 cursor-pointer">
+            <select onchange="window.location.href='?search={{ urlencode($search) }}&amp;banned={{ $bannedOnly ? 1 : 0 }}&amp;sort='+this.value" class="bg-gray-800 text-gray-100 p-2 rounded border border-gray-700 cursor-pointer">
                 @if ($search !== '')
                     <option value="relevance" {{ $sort === 'relevance' ? 'selected' : '' }}>Relevance</option>
                 @endif
@@ -78,6 +82,8 @@
             <div class="col-span-full p-8 bg-gray-900 rounded-lg text-center text-gray-400">
                 @if ($search !== '')
                     No videos found for &quot;{{ $search }}&quot;.
+                @elseif ($bannedOnly)
+                    No banned videos found.
                 @else
                     No videos archived yet.
                 @endif

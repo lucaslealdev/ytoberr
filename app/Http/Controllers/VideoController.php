@@ -23,8 +23,13 @@ class VideoController extends Controller
     {
         $search = trim((string) $request->query('search', ''));
         $sort = $request->query('sort', $search !== '' ? 'relevance' : 'newest');
+        $bannedOnly = $request->boolean('banned');
 
         $query = Video::with('channel')->where('status', 'completed');
+
+        if ($bannedOnly) {
+            $query->where('is_banned', true);
+        }
 
         if ($search !== '') {
             $query->search($search);
@@ -52,7 +57,7 @@ class VideoController extends Controller
 
         $videos = $query->paginate(12)->withQueryString();
 
-        return view('videos.index', compact('videos', 'search', 'sort'));
+        return view('videos.index', compact('videos', 'search', 'sort', 'bannedOnly'));
     }
 
     /**

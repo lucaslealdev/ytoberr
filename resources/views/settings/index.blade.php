@@ -237,6 +237,38 @@
         </div>
 
         <div class="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800 mb-6 break-inside-avoid">
+            <h3 class="text-lg font-semibold text-white mb-4">Banned Videos Check</h3>
+            <p class="text-xs text-gray-500 mb-4">Checks every already-downloaded video against YouTube to find ones that have since been removed/banned, marking them so you can filter for them on the Videos page. Runs in the background, 60 videos per minute, to avoid hammering YouTube — a full library can take a while, so feel free to navigate away and check back later. Each video is only ever re-checked once a week at most, no matter how many times you start this — running it again shortly after just picks up where it left off.</p>
+
+            @if ($bannedVideosCheckProgress['running'])
+                <div class="space-y-3">
+                    <div class="w-full bg-gray-800 rounded-full h-2.5 overflow-hidden">
+                        <div class="bg-blue-600 h-2.5" style="width: {{ $bannedVideosCheckProgress['total'] > 0 ? min(100, round($bannedVideosCheckProgress['checked'] / $bannedVideosCheckProgress['total'] * 100)) : 0 }}%"></div>
+                    </div>
+                    <p class="text-gray-400 text-sm">
+                        Checked {{ $bannedVideosCheckProgress['checked'] }} of {{ $bannedVideosCheckProgress['total'] }} videos
+                        &mdash; {{ $bannedVideosCheckProgress['found'] }} banned found so far.
+                        Started {{ $bannedVideosCheckProgress['started_at']->diffForHumans() }}.
+                    </p>
+                    <form action="{{ route('settings.banned-videos.cancel') }}" method="POST">
+                        @csrf
+                        <button type="submit" class="bg-red-600 text-white p-2 rounded hover:bg-red-700 text-sm">Cancel Check</button>
+                    </form>
+                </div>
+            @else
+                <div class="space-y-3">
+                    <p class="text-gray-400 text-sm">
+                        <span class="text-white font-semibold">{{ $bannedVideosCount }}</span> {{ Str::plural('video', $bannedVideosCount) }} currently marked banned.
+                    </p>
+                    <form action="{{ route('settings.banned-videos.start') }}" method="POST">
+                        @csrf
+                        <button type="submit" class="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 text-sm">Check for Banned Videos</button>
+                    </form>
+                </div>
+            @endif
+        </div>
+
+        <div class="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800 mb-6 break-inside-avoid">
             <h3 class="text-lg font-semibold text-white mb-4">About</h3>
             <div class="text-gray-400 text-sm space-y-2">
                 <p>

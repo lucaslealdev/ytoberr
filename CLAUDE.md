@@ -180,3 +180,7 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Always use this command instead of writing a one-off tinker/seed script — it's idempotent (safe to re-run) and keyed off a fixed `placeholder_demo_vid_*` youtube_id prefix / `Placeholder Demo Channel` name.
 - Clean up with `php artisan dev:seed-placeholder-videos --clear`, which removes exactly what it seeded (videos, channel, and the downloaded files/thumbnails on disk) — never real data.
 - It's dev-only: guarded by Laravel's standard production confirmation prompt (bypass with `--force` if ever needed against a non-local `APP_ENV`).
+
+# Git / Versioning
+
+- When asked to bump the version (`VERSION` file), never make it its own separate commit. Bump it as part of (i.e. amend into, or include unstaged alongside) the last feature/fix commit of the session instead, so each commit that changes app behavior carries its own version bump rather than being followed by a separate "chore: bump version" commit.

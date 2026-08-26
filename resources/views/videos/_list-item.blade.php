@@ -1,6 +1,9 @@
 <div data-video-card class="relative group">
     <a href="/videos/{{ $video->id }}" class="h-full bg-gray-900 rounded-lg overflow-hidden shadow border border-gray-800 hover:border-gray-700 transition duration-200 flex flex-col">
         <div class="relative aspect-video bg-gray-950 overflow-hidden">
+            @if ($video->is_banned)
+                <span class="absolute top-2 left-2 z-10 bg-red-600 text-white text-xs font-semibold px-2 py-0.5 rounded">Banned</span>
+            @endif
             @if ($video->thumbnailUrl())
                 <img src="{{ $video->thumbnailUrl() }}" alt="{{ $video->title }}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy">
             @else
