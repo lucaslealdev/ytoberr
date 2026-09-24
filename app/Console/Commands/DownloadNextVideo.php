@@ -190,28 +190,43 @@ class DownloadNextVideo extends Command
             $arguments[] = '--sleep-interval '.$delay;
         }
 
-        // Cookies support if present
-        $cookiePath = storage_path('app/cookies.txt');
-        if (file_exists($cookiePath)) {
-            $arguments[] = '--cookies '.escapeshellarg($cookiePath);
-        }
-
-        $argumentsString = implode(' ', $arguments);
         $url = 'https://www.youtube.com/watch?v='.$video->youtube_id;
-        $command = "{$ytDlp} {$argumentsString} ".escapeshellarg($url).' 2>&1';
 
-        $this->info('Running yt-dlp download...');
-        Log::info('DownloadNextVideo executing: '.$command);
+        $runDownload = function (array $arguments) use ($ytDlp, $url, $video, $ytDlpWrapper): array {
+            $command = "{$ytDlp} ".implode(' ', $arguments).' '.escapeshellarg($url).' 2>&1';
 
-        // 30 minutes: generous enough for a large video over a slow connection, while still
-        // guaranteeing a hung download gets killed outright instead of blocking this command
-        // (and the every-2-minutes schedule behind it, via withoutOverlapping()) forever.
-        [$output, $resultCode] = $ytDlpWrapper->runCommand(
-            $command,
-            1800,
-            $this->progressWriter($video),
-            fn (?int $pid) => $video->update(['download_pid' => $pid]),
-        );
+            $this->info('Running yt-dlp download...');
+            Log::info('DownloadNextVideo executing: '.$command);
+
+            // 30 minutes: generous enough for a large video over a slow connection, while still
+            // guaranteeing a hung download gets killed outright instead of blocking this command
+            // (and the every-2-minutes schedule behind it, via withoutOverlapping()) forever.
+            return $ytDlpWrapper->runCommand(
+                $command,
+                1800,
+                $this->progressWriter($video),
+                fn (?int $pid) => $video->update(['download_pid' => $pid]),
+            );
+        };
+
+        [$output, $resultCode] = $runDownload($arguments);
+
+        // Cookies are only used as a fallback, when YouTube actually demands a signed-in session
+        // for this video. Passing them unconditionally makes yt-dlp switch to its authenticated
+        // client set (web_embedded/tv_downgraded/web), which always requires solving the "n"
+        // JS challenge via node (memory-hungry, and OOM-killed on small hosts) and is prone to
+        // "The page needs to be reloaded" errors from a stale/rotated cookie session — whereas
+        // anonymously yt-dlp can use clients (e.g. visionos) that need no JS challenge at all.
+        $cookiePath = storage_path('app/cookies.txt');
+        if (
+            $resultCode !== 0
+            && file_exists($cookiePath)
+            && Video::requiresSignedInSession(implode("\n", $output))
+            && is_null($video->fresh()->cancel_requested_at)
+        ) {
+            $this->info('YouTube requires a signed-in session for this video; retrying with cookies...');
+            [$output, $resultCode] = $runDownload([...$arguments, '--cookies '.escapeshellarg($cookiePath)]);
+        }
 
         $rawOutput = implode("\n", $output);
 

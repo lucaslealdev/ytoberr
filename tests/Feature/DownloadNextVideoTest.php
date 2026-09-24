@@ -319,6 +319,124 @@ BASH);
         unlink($mockYtDlp);
     }
 
+    /**
+     * Mock yt-dlp that appends each invocation's arguments to "<script>.calls" and succeeds
+     * (writing dummy output files) unless it was called without --cookies and $failWithoutCookies
+     * is set, in which case it prints that message and exits 1.
+     */
+    private function writeCookieAwareMockYtDlp(string $path, ?string $failWithoutCookies): void
+    {
+        $failBlock = $failWithoutCookies === null ? '' : <<<BASH
+if [[ "\$*" != *--cookies* ]]; then
+    echo "{$failWithoutCookies}"
+    exit 1
+fi
+BASH;
+
+        file_put_contents($path, <<<BASH
+#!/bin/bash
+echo "\$*" >> "\$0.calls"
+{$failBlock}
+for arg in "\$@"; do
+    if [[ \$arg == *video.* ]]; then
+        out_dir=\$(dirname "\$arg")
+        mkdir -p "\$out_dir"
+        echo "dummy video" > "\$out_dir/video.mp4"
+        exit 0
+    fi
+done
+exit 1
+BASH);
+        chmod($path, 0755);
+        config(['services.ytdlp_path' => $path]);
+    }
+
+    private function createCookieTestVideo(): Video
+    {
+        $channel = Channel::create([
+            'youtube_id' => 'UC_test_chan',
+            'name' => 'Space Channel',
+            'url' => 'https://example.com/space',
+        ]);
+
+        return Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'cookie_test_vid',
+            'title' => 'Cookie Test Video',
+            'published_at' => '2026-07-10 12:00:00',
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_downloader_does_not_pass_cookies_when_the_anonymous_download_succeeds()
+    {
+        // Regression test: passing cookies unconditionally makes yt-dlp switch to its
+        // authenticated clients, which always need the node JS challenge (OOM-killed on small
+        // hosts) and fail with "The page needs to be reloaded" on a stale cookie session.
+        $video = $this->createCookieTestVideo();
+        file_put_contents(storage_path('app/cookies.txt'), "# Netscape HTTP Cookie File\n");
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_cookies_unneeded.sh');
+        $this->writeCookieAwareMockYtDlp($mockYtDlp, null);
+
+        try {
+            Artisan::call('videos:download');
+
+            $calls = file($mockYtDlp.'.calls', FILE_IGNORE_NEW_LINES);
+            $this->assertCount(1, $calls);
+            $this->assertStringNotContainsString('--cookies', $calls[0]);
+            $this->assertEquals('completed', $video->refresh()->status);
+        } finally {
+            @unlink(storage_path('app/cookies.txt'));
+            @unlink($mockYtDlp.'.calls');
+            unlink($mockYtDlp);
+        }
+    }
+
+    public function test_downloader_retries_with_cookies_when_youtube_requires_sign_in()
+    {
+        $video = $this->createCookieTestVideo();
+        file_put_contents(storage_path('app/cookies.txt'), "# Netscape HTTP Cookie File\n");
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_cookies_needed.sh');
+        $this->writeCookieAwareMockYtDlp($mockYtDlp, "ERROR: [youtube] cookie_test_vid: Sign in to confirm you're not a bot");
+
+        try {
+            Artisan::call('videos:download');
+
+            $calls = file($mockYtDlp.'.calls', FILE_IGNORE_NEW_LINES);
+            $this->assertCount(2, $calls);
+            $this->assertStringNotContainsString('--cookies', $calls[0]);
+            $this->assertStringContainsString('--cookies', $calls[1]);
+            $video->refresh();
+            $this->assertEquals('completed', $video->status);
+            $this->assertEquals(0, $video->retries);
+        } finally {
+            @unlink(storage_path('app/cookies.txt'));
+            @unlink($mockYtDlp.'.calls');
+            unlink($mockYtDlp);
+        }
+    }
+
+    public function test_downloader_does_not_retry_with_cookies_for_unrelated_failures()
+    {
+        $video = $this->createCookieTestVideo();
+        file_put_contents(storage_path('app/cookies.txt'), "# Netscape HTTP Cookie File\n");
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_cookies_unrelated.sh');
+        $this->writeCookieAwareMockYtDlp($mockYtDlp, 'ERROR: [youtube] cookie_test_vid: Unable to download webpage: HTTP Error 503');
+
+        try {
+            Artisan::call('videos:download');
+
+            foreach (file($mockYtDlp.'.calls', FILE_IGNORE_NEW_LINES) as $call) {
+                $this->assertStringNotContainsString('--cookies', $call);
+            }
+            $this->assertNotEquals('completed', $video->refresh()->status);
+        } finally {
+            @unlink(storage_path('app/cookies.txt'));
+            @unlink($mockYtDlp.'.calls');
+            unlink($mockYtDlp);
+        }
+    }
+
     public function test_downloader_suspends_queue_on_three_consecutive_failures()
     {
         $channel = Channel::create([

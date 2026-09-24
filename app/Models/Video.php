@@ -98,6 +98,19 @@ class Video extends Model
     }
 
     /**
+     * Whether yt-dlp's error output indicates the video can only be fetched with a signed-in
+     * YouTube session (bot check, age gate or members-only), i.e. a retry with cookies could
+     * succeed where an anonymous attempt failed.
+     */
+    public static function requiresSignedInSession(string $errorOutput): bool
+    {
+        return self::isMembersOnlyRestricted($errorOutput) || Str::contains(strtolower($errorOutput), [
+            'sign in to confirm',
+            'confirm your age',
+        ]);
+    }
+
+    /**
      * Whether yt-dlp's error output indicates the video is a scheduled premiere that hasn't
      * gone live yet (e.g. "Premieres in 43 minutes"). yt-dlp can't extract downloadable
      * formats until the premiere actually starts, so this surfaces as a metadata-fetch
