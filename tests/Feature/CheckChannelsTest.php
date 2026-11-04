@@ -954,4 +954,28 @@ BASH;
 
         unlink($mockYtDlp);
     }
+
+    public function test_check_channels_never_checks_an_untracked_channel_even_when_explicitly_targeted()
+    {
+        $channel = Channel::create([
+            'youtube_id' => 'UC_untracked_sweep_chan',
+            'name' => 'Untracked Sweep Channel',
+            'url' => 'https://www.youtube.com/@untracked_sweep_channel',
+            'cutoff_date' => '2020-01-01',
+            'tracking_enabled' => false,
+        ]);
+
+        $videos = [['id' => 'untracked_sweep_vid', 'title' => 'Untracked Sweep Video', 'upload_date' => '20260713', 'was_live' => false, 'media_type' => null]];
+        $mockYtDlp = $this->mockYtDlpWithVideos('untracked_sweep_channel', $videos);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('app:check-channels');
+        Artisan::call('app:check-channels', ['--channel' => $channel->id]);
+
+        $this->assertStringNotContainsString('Checking channel: Untracked Sweep Channel', Artisan::output());
+        $this->assertDatabaseMissing('videos', ['youtube_id' => 'untracked_sweep_vid']);
+        $this->assertNull($channel->fresh()->last_checked_at);
+
+        unlink($mockYtDlp);
+    }
 }

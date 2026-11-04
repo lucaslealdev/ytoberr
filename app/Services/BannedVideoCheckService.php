@@ -140,6 +140,9 @@ class BannedVideoCheckService
     private function eligibleQuery(): Builder
     {
         return Video::where('status', 'completed')
+            // Videos of a channel with tracking turned off are never checked: a deleted channel's
+            // videos all look removed, which is exactly the false positive this avoids.
+            ->whereHas('channel', fn (Builder $channelQuery) => $channelQuery->where('tracking_enabled', true))
             // Once a video is marked banned it's permanent — never re-checked by a later run.
             ->where('is_banned', false)
             ->where(function (Builder $query) {

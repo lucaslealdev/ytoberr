@@ -263,4 +263,53 @@ class CheckBannedVideosTest extends TestCase
         $response->assertRedirect();
         $this->assertFalse(app(BannedVideoCheckService::class)->isRunning());
     }
+
+    public function test_videos_of_an_untracked_channel_are_never_checked_or_marked_banned()
+    {
+        // A deleted channel's videos all return 404, so checking them would mark them all as
+        // removed. With tracking off they must be excluded entirely.
+        $untracked = Channel::create([
+            'youtube_id' => 'UC_untracked_ban_chan',
+            'name' => 'Untracked Ban Channel',
+            'url' => 'https://example.com/untrackedban',
+            'tracking_enabled' => false,
+        ]);
+        $deletedVideo = $this->makeCompletedVideo($untracked, 'untracked_deleted_vid');
+
+        Http::fake(['https://img.youtube.com/vi/untracked_deleted_vid/0.jpg' => Http::response('', 404)]);
+
+        app(BannedVideoCheckService::class)->start();
+        $this->assertSame(0, app(BannedVideoCheckService::class)->progress()['total']);
+
+        Artisan::call('videos:check-banned-videos');
+
+        Http::assertNothingSent();
+        $this->assertFalse((bool) $deletedVideo->refresh()->is_banned);
+        $this->assertNull($deletedVideo->banned_checked_at);
+        $this->assertDatabaseMissing('warnings', ['source' => 'banned_videos_found']);
+    }
+
+    public function test_videos_of_a_tracked_channel_are_still_checked_alongside_an_untracked_one()
+    {
+        $tracked = Channel::create(['youtube_id' => 'UC_tracked_ban_chan', 'name' => 'Tracked Ban Channel', 'url' => 'https://example.com/trackedban']);
+        $untracked = Channel::create([
+            'youtube_id' => 'UC_untracked_mixed_chan',
+            'name' => 'Untracked Mixed Channel',
+            'url' => 'https://example.com/untrackedmixed',
+            'tracking_enabled' => false,
+        ]);
+
+        $removed = $this->makeCompletedVideo($tracked, 'tracked_removed_vid');
+        $this->makeCompletedVideo($untracked, 'untracked_skipped_vid');
+
+        Http::fake(['https://img.youtube.com/vi/tracked_removed_vid/0.jpg' => Http::response('', 404)]);
+
+        app(BannedVideoCheckService::class)->start();
+        $this->assertSame(1, app(BannedVideoCheckService::class)->progress()['total']);
+
+        Artisan::call('videos:check-banned-videos');
+
+        $this->assertTrue((bool) $removed->refresh()->is_banned);
+        Http::assertSentCount(1);
+    }
 }

@@ -932,4 +932,95 @@ BASH;
             }
         }
     }
+
+    public function test_turning_tracking_off_from_the_settings_modal_clears_removed_flags_on_its_videos()
+    {
+        // A deleted channel's videos were (or would be) flagged as banned. Turning tracking off must
+        // stop the system from treating them as removed, so the flags are cleared.
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_tracking_off_chan',
+            'name' => 'Tracking Off Channel',
+            'url' => 'https://example.com/trackingoff',
+        ]);
+        $banned = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'tracking_off_banned_vid',
+            'title' => 'Banned Video',
+            'published_at' => now(),
+            'status' => 'completed',
+            'is_banned' => true,
+            'banned_checked_at' => now(),
+        ]);
+
+        $response = $this->actingAs($user)->patchJson('/channels/'.$channel->id.'/settings', [
+            'quality' => '720p',
+            'cutoff_date' => '2026-01-01',
+            'tracking_enabled' => '0',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson(['channel' => ['tracking_enabled' => false]]);
+        $this->assertFalse($channel->fresh()->tracking_enabled);
+        $this->assertFalse((bool) $banned->refresh()->is_banned);
+        $this->assertNull($banned->banned_checked_at);
+    }
+
+    public function test_tracking_can_be_turned_back_on_from_the_settings_modal()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_tracking_on_chan',
+            'name' => 'Tracking On Channel',
+            'url' => 'https://example.com/trackingon',
+            'tracking_enabled' => false,
+        ]);
+
+        $response = $this->actingAs($user)->patchJson('/channels/'.$channel->id.'/settings', [
+            'quality' => '720p',
+            'cutoff_date' => '2026-01-01',
+            'tracking_enabled' => '1',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson(['channel' => ['tracking_enabled' => true]]);
+        $this->assertTrue($channel->fresh()->tracking_enabled);
+    }
+
+    public function test_saving_settings_without_the_tracking_field_leaves_tracking_unchanged()
+    {
+        // Clients that don't send tracking_enabled (e.g. older cached pages) must not switch it off.
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_tracking_absent_chan',
+            'name' => 'Tracking Absent Channel',
+            'url' => 'https://example.com/trackingabsent',
+            'tracking_enabled' => false,
+        ]);
+
+        $this->actingAs($user)->patchJson('/channels/'.$channel->id.'/settings', [
+            'quality' => '720p',
+            'cutoff_date' => '2026-01-01',
+        ])->assertStatus(200);
+
+        $this->assertFalse($channel->fresh()->tracking_enabled);
+    }
+
+    public function test_channel_page_flags_an_untracked_channel_and_disables_its_check_button()
+    {
+        $user = User::factory()->create();
+        $channel = Channel::create([
+            'youtube_id' => 'UC_untracked_page_chan',
+            'name' => 'Untracked Page Channel',
+            'url' => 'https://example.com/untrackedpage',
+            'tracking_enabled' => false,
+        ]);
+
+        $response = $this->actingAs($user)->get('/channels/'.$channel->id);
+
+        $response->assertStatus(200);
+        $response->assertSee('data-tracking-enabled="0"', false);
+        $response->assertSee('Tracking is turned off for this channel');
+        $response->assertSee('Tracking off');
+    }
 }

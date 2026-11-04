@@ -197,12 +197,22 @@ class ChannelController extends Controller
             'download_shorts' => $request->boolean('download_shorts'),
             // Empty/absent means "use the global default" (Channel::DEFAULT_CHECK_INTERVAL_HOURS).
             'check_interval_hours' => $request->filled('check_interval_hours') ? (int) $request->check_interval_hours : null,
+            // Only touched when the field is sent at all, so older clients that don't know about
+            // tracking can't accidentally switch it off.
+            ...($request->has('tracking_enabled') ? ['tracking_enabled' => $request->boolean('tracking_enabled')] : []),
         ]);
+
+        // A channel that isn't tracked must not keep "removed" flags from an earlier check: a
+        // deleted channel's videos would otherwise stay marked banned. Clearing them also means
+        // re-enabling tracking later gets a fresh check instead of trusting stale results.
+        if (! $channel->tracking_enabled) {
+            $channel->videos()->update(['is_banned' => false, 'banned_checked_at' => null]);
+        }
 
         if ($request->wantsJson()) {
             return response()->json([
                 'message' => 'Channel settings updated successfully!',
-                'channel' => $channel->only(['id', 'cutoff_date', 'download_quality', 'download_shorts', 'check_interval_hours']),
+                'channel' => $channel->only(['id', 'cutoff_date', 'download_quality', 'download_shorts', 'check_interval_hours', 'tracking_enabled']),
             ]);
         }
 

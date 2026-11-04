@@ -16,13 +16,14 @@ class Channel extends Model
     protected $fillable = [
         'youtube_id', 'name', 'url', 'profile_image_path', 'banner_path', 'fanart_path',
         'download_quality', 'cutoff_date', 'description', 'download_shorts',
-        'check_interval_hours', 'last_checked_at',
+        'check_interval_hours', 'last_checked_at', 'tracking_enabled',
     ];
 
     protected function casts(): array
     {
         return [
             'last_checked_at' => 'datetime',
+            'tracking_enabled' => 'boolean',
         ];
     }
 
