@@ -49,6 +49,9 @@
                     {{ \Illuminate\Support\Number::fileSize($channel->totalDownloadedBytes(), precision: 1) }} total
                     <span class="mx-1.5">•</span>
                     <span class="channel-quality-label">{{ $channel->download_quality ?? '720p' }}</span>
+                    <span class="channel-tracking-label text-amber-400 {{ $channel->tracking_enabled ? 'hidden' : '' }}">
+                        <span class="mx-1.5">•</span>Tracking off
+                    </span>
                 </p>
             </div>
         </div>

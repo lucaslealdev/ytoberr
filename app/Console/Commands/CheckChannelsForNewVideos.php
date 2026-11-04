@@ -52,6 +52,12 @@ class CheckChannelsForNewVideos extends Command
         $isTargeted = (bool) $this->option('channel');
 
         foreach ($channels as $channel) {
+            // A channel with tracking turned off is never checked, even when explicitly targeted:
+            // turning tracking off means the system must not look at it at all.
+            if (! $channel->tracking_enabled) {
+                continue;
+            }
+
             if (! $isTargeted && ! $channel->isDueForCheck()) {
                 continue;
             }

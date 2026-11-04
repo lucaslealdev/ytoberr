@@ -9,6 +9,14 @@
         <form id="channel-settings-form" class="space-y-5">
             <p id="channel-settings-error" class="hidden text-sm text-red-400 bg-red-950/50 border border-red-900 rounded p-2"></p>
 
+            <div class="flex items-center justify-between gap-2">
+                <label for="channel-settings-tracking" class="text-sm text-gray-400">
+                    Track this channel
+                    <span class="block text-xs text-gray-500 mt-0.5">When off, the channel is never checked for new videos or downloaded from, and its videos are never checked for removal. Use this for channels deleted on YouTube.</span>
+                </label>
+                <input type="checkbox" id="channel-settings-tracking" name="tracking_enabled" value="1" class="flex-shrink-0 rounded border-gray-600 bg-gray-800">
+            </div>
+
             <div class="space-y-2">
                 <label class="block text-gray-400 text-sm">Cut-off Date</label>
                 <p class="text-xs text-gray-500">Videos published before this date are never downloaded.</p>
@@ -115,6 +123,7 @@
         const cutoffDateInput = document.getElementById('channel-settings-cutoff-date');
         const qualitySelect = document.getElementById('channel-settings-quality');
         const downloadShortsCheckbox = document.getElementById('channel-settings-download-shorts');
+        const trackingCheckbox = document.getElementById('channel-settings-tracking');
         const checkIntervalInput = document.getElementById('channel-settings-check-interval');
         const btnSaveSettings = document.getElementById('btn-save-channel-settings');
         let activeSettingsWrapper = null;
@@ -124,6 +133,7 @@
             cutoffDateInput.value = wrapper.dataset.cutoffDate || '';
             qualitySelect.value = wrapper.dataset.quality || '720p';
             downloadShortsCheckbox.checked = wrapper.dataset.downloadShorts === '1';
+            trackingCheckbox.checked = wrapper.dataset.trackingEnabled === '1';
             checkIntervalInput.value = wrapper.dataset.checkIntervalHours || '';
             settingsError.classList.add('hidden');
             settingsModal.classList.remove('hidden');
@@ -172,6 +182,7 @@
                     cutoff_date: cutoffDateInput.value,
                     quality: qualitySelect.value,
                     download_shorts: downloadShortsCheckbox.checked ? '1' : '0',
+                    tracking_enabled: trackingCheckbox.checked ? '1' : '0',
                     check_interval_hours: checkIntervalInput.value,
                 }),
             })
@@ -189,6 +200,7 @@
                     wrapper.dataset.quality = data.channel.download_quality;
                     wrapper.dataset.downloadShorts = data.channel.download_shorts ? '1' : '0';
                     wrapper.dataset.checkIntervalHours = data.channel.check_interval_hours ?? '';
+                    wrapper.dataset.trackingEnabled = data.channel.tracking_enabled ? '1' : '0';
 
                     const card = wrapper.closest('[data-channel-card]');
                     if (card) {
@@ -196,6 +208,17 @@
                         if (qualityLabel) {
                             qualityLabel.textContent = data.channel.download_quality;
                         }
+
+                        const trackingLabel = card.querySelector('.channel-tracking-label');
+                        if (trackingLabel) {
+                            trackingLabel.classList.toggle('hidden', data.channel.tracking_enabled);
+                        }
+                    }
+
+                    const checkNewVideosBtn = wrapper.querySelector('.channel-check-new-videos');
+                    if (checkNewVideosBtn) {
+                        checkNewVideosBtn.disabled = !data.channel.tracking_enabled;
+                        checkNewVideosBtn.title = data.channel.tracking_enabled ? '' : 'Tracking is turned off for this channel';
                     }
 
                     closeSettingsModal();

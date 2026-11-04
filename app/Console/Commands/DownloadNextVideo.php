@@ -11,6 +11,7 @@ use App\Services\VideoCompressionService;
 use App\Services\YtDlpWrapper;
 use App\Support\PlexNaming;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Sleep;
@@ -53,9 +54,13 @@ class DownloadNextVideo extends Command
 
         while (true) {
             // 1. Fetch next pending video
+            // Pending videos of an untracked channel stay queued (not failed) until tracking is
+            // back on: attempting them would just fail as "unavailable" and count toward the
+            // consecutive-failure queue suspension.
             $video = Video::with('channel')
                 ->where('status', 'pending')
                 ->where('prevent_download', false)
+                ->whereHas('channel', fn (Builder $channelQuery) => $channelQuery->where('tracking_enabled', true))
                 ->orderBy('created_at', 'asc')
                 ->first();
 

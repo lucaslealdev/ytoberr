@@ -954,4 +954,47 @@ BASH);
             exec('rm -rf '.escapeshellarg($downloadsDir.'/Sleep Multi Channel'));
         }
     }
+
+    public function test_downloader_leaves_pending_videos_of_an_untracked_channel_untouched()
+    {
+        // A deleted channel's queued videos would fail as "unavailable", which would mark them
+        // permanently unavailable and count toward the queue-suspension threshold. While tracking is
+        // off they must stay pending and never reach yt-dlp.
+        $channel = Channel::create([
+            'youtube_id' => 'UC_untracked_dl_chan',
+            'name' => 'Untracked Download Channel',
+            'url' => 'https://example.com/untrackeddl',
+            'tracking_enabled' => false,
+        ]);
+
+        $video = Video::create([
+            'channel_id' => $channel->id,
+            'youtube_id' => 'untracked_dl_vid',
+            'title' => 'Untracked Download Video',
+            'published_at' => '2026-07-10 12:00:00',
+            'status' => 'pending',
+        ]);
+
+        $marker = storage_path('app/temp/untracked_dl_invoked.marker');
+        @unlink($marker);
+        $mockYtDlp = storage_path('app/temp/mock_ytdlp_untracked_dl.sh');
+        file_put_contents($mockYtDlp, <<<BASH
+#!/bin/bash
+touch '{$marker}'
+echo "ERROR: Video unavailable"
+exit 1
+BASH);
+        chmod($mockYtDlp, 0755);
+        config(['services.ytdlp_path' => $mockYtDlp]);
+
+        Artisan::call('videos:download');
+
+        $this->assertFileDoesNotExist($marker);
+        $video->refresh();
+        $this->assertSame('pending', $video->status);
+        $this->assertFalse((bool) $video->prevent_download);
+        $this->assertSame(0, $video->retries);
+
+        unlink($mockYtDlp);
+    }
 }

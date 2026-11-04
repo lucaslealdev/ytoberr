@@ -9,6 +9,7 @@
     data-quality="{{ $channel->download_quality ?? '720p' }}"
     data-download-shorts="{{ $channel->download_shorts ? '1' : '0' }}"
     data-check-interval-hours="{{ $channel->check_interval_hours ?? '' }}"
+    data-tracking-enabled="{{ $channel->tracking_enabled ? '1' : '0' }}"
     data-settings-url="{{ route('channels.settings.update', $channel) }}"
     data-delete-url="{{ route('channels.destroy', $channel) }}"
     data-check-new-videos-url="{{ route('channels.check-new-videos', $channel) }}"
@@ -27,7 +28,7 @@
         <button type="button" class="channel-open-settings w-full text-left px-4 py-2 text-gray-200 hover:bg-gray-700 flex items-center gap-2">
             <span>⚙️</span> Channel Settings
         </button>
-        <button type="button" class="channel-check-new-videos w-full text-left px-4 py-2 text-gray-200 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+        <button type="button" class="channel-check-new-videos w-full text-left px-4 py-2 text-gray-200 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2" @disabled(! $channel->tracking_enabled) title="{{ $channel->tracking_enabled ? '' : 'Tracking is turned off for this channel' }}">
             <span class="check-new-videos-icon">🔄</span>
             <span class="check-new-videos-label">Check for New Videos</span>
         </button>
